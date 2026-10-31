@@ -4,6 +4,7 @@
 #include <stdlib.h>
 #include "rt.h"
 #include "u256.h"
+#include "util.h"
 #include "keccak.h"
 #include "abi.h"
 #include "evm.h"
@@ -15,7 +16,11 @@ enum { TOOL_RESPONSE = 256, TOOL_RESPONSE_END, THINK, THINK_END };
 // Non-bridge gate-1 input: the NUL-terminated cmd line in eth_in (RAM 0x100;
 // the host pokes it into the snapshot), exactly like calc_in in calc.c.
 #ifndef BRIDGE
+#ifdef HOST_FUZZ
+char eth_in[2048];
+#else
 char eth_in[2048] __attribute__((section(".ethin")));
+#endif
 #endif
 
 static void put(int c){ rv_ecall2(1,c,0,0); }
@@ -97,7 +102,7 @@ static int is_right_assoc(const char *op){ return strcmp(op,"**")==0; }
 // command handlers
 static void handle_keccak(const char *arg){
     char tmp[2048];
-    strncpy(tmp, arg, sizeof(tmp)-1); tmp[sizeof(tmp)-1]=0;
+    cpy_cap(tmp, arg, sizeof(tmp));
     char *s=tmp;
     while(isspace((unsigned char)*s)) s++;
     char *e=s+strlen(s);
@@ -128,7 +133,7 @@ static void handle_keccak(const char *arg){
 }
 
 static void handle_selector(const char *arg){
-    char tmp[256]; strncpy(tmp,arg,sizeof(tmp)-1); tmp[sizeof(tmp)-1]=0;
+    char tmp[256]; cpy_cap(tmp, arg, sizeof(tmp));
     char *s=tmp; while(isspace((unsigned char)*s)) s++;
     char *e=s+strlen(s); while(e>s && isspace((unsigned char)e[-1])){ e--; *e=0; }
     if(!*s){ put_str("error (bad sig)\n"); return; }
@@ -139,13 +144,14 @@ static void handle_selector(const char *arg){
 }
 
 static void handle_encode(const char *arg){
-    char tmp[2048]; strncpy(tmp,arg,sizeof(tmp)-1); tmp[sizeof(tmp)-1]=0;
+    char tmp[2048]; cpy_cap(tmp, arg, sizeof(tmp));
     char *s=tmp; while(isspace((unsigned char)*s)) s++;
     char *lp=strchr(s,'(');
     if(!lp){ put_str("error (bad encode)\n"); return; }
     char *rp=strchr(lp,')');
     if(!rp){ put_str("error (bad encode)\n"); return; }
     size_t siglen = rp - s +1;
+    if(siglen >= 512){ put_str("error (bad sig)\n"); return; }
     char sig[512]; memcpy(sig,s,siglen); sig[siglen]=0;
     char *rest = rp+1;
     while(isspace((unsigned char)*rest)) rest++;
@@ -162,22 +168,42 @@ static void handle_encode(const char *arg){
             if(!*p) break;
             char buf[256]; int bi=0;
             if(*p=='"'||*p=='\''){
-                char q=*p++; while(*p && *p!=q && bi<255){ buf[bi++]=*p++; } if(*p==q) p++; buf[bi]=0;
+                char q=*p++; while(*p && *p!=q && bi<255){ buf[bi++]=*p++; }
+                if(bi==255 && *p!=q){ put_str("error (arg too long)\n"); return; }
+                if(*p==q) p++; buf[bi]=0;
             } else {
-                while(*p && !isspace((unsigned char)*p) && *p!=',' && bi<255){ buf[bi++]=*p++; } buf[bi]=0;
+                // Bracket-aware: array args "[1,2,3]" survive unquoted.
+                int depth=0;
+                while(*p && bi<255){
+                    if(*p=='[') depth++;
+                    else if(*p==']' && depth>0) depth--;
+                    else if(depth==0 && (isspace((unsigned char)*p) || *p==',')) break;
+                    buf[bi++]=*p++;
+                }
+                if(bi==255 && *p && (depth>0 || (!isspace((unsigned char)*p) && *p!=','))){ put_str("error (arg too long)\n"); return; }
+                buf[bi]=0;
             }
-            if(bi==0) break;
+            // NOTE: no bi==0 break — quoted "" is a real empty arg (only ""
+            // can yield bi==0 here), so empty strings are encodable.
             // Byte copy, not strcpy (picolibc strcpy faults on misaligned LW/SW).
             for(int bi2=0;bi2<=bi;bi2++) arg_bufs[idx][bi2]=buf[bi2];
             arg_ptrs[idx]=arg_bufs[idx];
             idx++;
         }
         if(idx!=ntypes){ put_str("error (arg count)\n"); return; }
+        // Strict: anything after the last arg is an error, not ignored.
+        while(isspace((unsigned char)*p) || *p==',') p++;
+        if(*p){ put_str("error (arg count)\n"); return; }
         for(int i=0;i<ntypes;i++) arg_ptrs[i]=arg_bufs[i];
+    } else {
+        // Zero-arg call: the line must end after the sig.
+        char *q=rest;
+        while(isspace((unsigned char)*q) || *q==',') q++;
+        if(*q){ put_str("error (arg count)\n"); return; }
     }
     uint8_t out[4096]; size_t out_len=0;
     if(ntypes>0){
-        if(abi_encode_calldata(sig, arg_ptrs, ntypes, out, &out_len, errb, sizeof(errb))!=0){ put_str("error "); put_str(errb); put('\n'); return; }
+        if(abi_encode_calldata(sig, arg_ptrs, ntypes, out, sizeof(out), &out_len, errb, sizeof(errb))!=0){ put_str("error ("); put_str(errb); put_str(")\n"); return; }
     } else {
         uint32_t sel=abi_selector(sig);
         out[0]=(sel>>24)&0xFF; out[1]=(sel>>16)&0xFF; out[2]=(sel>>8)&0xFF; out[3]=sel&0xFF; out_len=4;
@@ -188,7 +214,7 @@ static void handle_encode(const char *arg){
 }
 
 static void handle_decode(const char *arg){
-    char tmp[4096]; strncpy(tmp,arg,sizeof(tmp)-1); tmp[sizeof(tmp)-1]=0;
+    char tmp[4096]; cpy_cap(tmp, arg, sizeof(tmp));
     char *s=tmp; while(isspace((unsigned char)*s)) s++;
     char *end=s+strlen(s); while(end>s && isspace((unsigned char)end[-1])){ end--; *end=0; }
     char *last_space=NULL;
@@ -198,16 +224,13 @@ static void handle_decode(const char *arg){
     char *types=s;
     char *hexd=last_space+1;
     while(isspace((unsigned char)*hexd)) hexd++;
-    char types_clean[512]; int p=0;
-    for(int i=0; types[i] && p<511;i++) if(!isspace((unsigned char)types[i])) types_clean[p++]=types[i];
-    types_clean[p]=0;
     char out_lines[4096]; char errb[128];
-    if(abi_decode(types_clean, hexd, out_lines, sizeof(out_lines), errb,sizeof(errb))!=0){ put_str("error "); put_str(errb); put('\n'); return; }
+    if(abi_decode(types, hexd, out_lines, sizeof(out_lines), errb,sizeof(errb))!=0){ put_str("error ("); put_str(errb); put_str(")\n"); return; }
     put_str(out_lines);
 }
 
 static void handle_u256(const char *arg){
-    char tmp[512]; strncpy(tmp,arg,sizeof(tmp)-1); tmp[sizeof(tmp)-1]=0;
+    char tmp[512]; cpy_cap(tmp, arg, sizeof(tmp));
     char *s=tmp; while(isspace((unsigned char)*s)) s++;
     char *e=s+strlen(s); while(e>s && isspace((unsigned char)e[-1])){ e--; *e=0; }
     int check_overflow=0, print_hex=0;
@@ -240,7 +263,7 @@ static void handle_u256(const char *arg){
                 if(*np=='('){
                     u256_t z; u256_zero(&z);
                     toks[ntok].kind=0; toks[ntok].num=z; ntok++;
-                    toks[ntok].kind=1; strcpy(toks[ntok].op, (*p=='-'?"-":"+")); ntok++; p++; expect_operand=1; continue;
+                    toks[ntok].kind=1; toks[ntok].op[0]=*p; toks[ntok].op[1]=0; ntok++; p++; expect_operand=1; continue;
                 }
             }
             char *start=p;
@@ -262,10 +285,10 @@ static void handle_u256(const char *arg){
             toks[ntok].kind=0; toks[ntok].num=v; ntok++;
             expect_operand=0;
         } else {
-            if(*p==')'){ toks[ntok].kind=2; strcpy(toks[ntok].op,")"); ntok++; p++; expect_operand=0; continue; }
-            if(p[0]=='*' && p[1]=='*'){ toks[ntok].kind=1; strcpy(toks[ntok].op,"**"); ntok++; p+=2; expect_operand=1; continue; }
-            if(p[0]=='<' && p[1]=='<'){ toks[ntok].kind=1; strcpy(toks[ntok].op,"<<"); ntok++; p+=2; expect_operand=1; continue; }
-            if(p[0]=='>' && p[1]=='>'){ toks[ntok].kind=1; strcpy(toks[ntok].op,">>"); ntok++; p+=2; expect_operand=1; continue; }
+            if(*p==')'){ toks[ntok].kind=2; toks[ntok].op[0]=')'; toks[ntok].op[1]=0; ntok++; p++; expect_operand=0; continue; }
+            if(p[0]=='*' && p[1]=='*'){ toks[ntok].kind=1; toks[ntok].op[0]='*'; toks[ntok].op[1]='*'; toks[ntok].op[2]=0; ntok++; p+=2; expect_operand=1; continue; }
+            if(p[0]=='<' && p[1]=='<'){ toks[ntok].kind=1; toks[ntok].op[0]='<'; toks[ntok].op[1]='<'; toks[ntok].op[2]=0; ntok++; p+=2; expect_operand=1; continue; }
+            if(p[0]=='>' && p[1]=='>'){ toks[ntok].kind=1; toks[ntok].op[0]='>'; toks[ntok].op[1]='>'; toks[ntok].op[2]=0; ntok++; p+=2; expect_operand=1; continue; }
             if(strchr("+-*/%&|^", *p)){ toks[ntok].kind=1; toks[ntok].op[0]=*p; toks[ntok].op[1]=0; ntok++; p++; expect_operand=1; continue; }
             put_str("error (bad op)\n"); return;
         }
@@ -356,30 +379,54 @@ static void handle_u256(const char *arg){
 #undef MAX_TOK
 }
 
-static void handle_create(const char *arg){
-    char tmp[512]; strncpy(tmp,arg,sizeof(tmp)-1); tmp[sizeof(tmp)-1]=0;
-    char *p=tmp;
-    char *tok1=NULL, *tok2=NULL;
-    while(isspace((unsigned char)*p)) p++;
-    tok1=p;
-    while(*p && !isspace((unsigned char)*p) && *p!=',') p++;
-    if(*p){ *p=0; p++; }
-    while(isspace((unsigned char)*p) || *p==',') p++;
-    tok2=p;
-    char *e=tok2+strlen(tok2);
-    while(e>tok2 && isspace((unsigned char)e[-1])){ e--; *e=0; }
-    if(!*tok1 || !*tok2){ put_str("error (bad create)\n"); return; }
-    uint8_t addr[20];
-    const char *s=tok1;
+// Strict uint64: decimal or 0x-hex, full match, no sign, no octal.
+static int parse_nonce(const char *s, unsigned long long *out){
     while(isspace((unsigned char)*s)) s++;
-    if(s[0]=='0'&&(s[1]=='x'||s[1]=='X')) s+=2;
-    if(strlen(s)!=40){ put_str("error (bad address)\n"); return; }
-    for(int i=0;i<20;i++){
-        int hi=hex_nibble(s[i*2]), lo=hex_nibble(s[i*2+1]);
-        if(hi<0||lo<0){ put_str("error (bad hex)\n"); return; }
-        addr[i]=(hi<<4)|lo;
+    int hex=0;
+    if(s[0]=='0'&&(s[1]=='x'||s[1]=='X')){ hex=1; s+=2; }
+    if(!*s) return -1;
+    unsigned long long v=0;
+    if(hex){
+        if(!isxdigit((unsigned char)*s)) return -1;
+        while(isxdigit((unsigned char)*s)){
+            int d=hex_nibble(*s++);
+            if(v > 0xFFFFFFFFFFFFFFFULL/16) return -1;
+            v=v*16+(unsigned)d;
+        }
+    } else {
+        if(!isdigit((unsigned char)*s)) return -1;
+        while(isdigit((unsigned char)*s)){
+            int d=*s++-'0';
+            if(v > 0xFFFFFFFFFFFFFFFFULL/10) return -1;
+            unsigned long long nv=v*10+(unsigned)d;
+            if(nv < v) return -1;
+            v=nv;
+        }
     }
-    unsigned long long nonce=strtoull(tok2,NULL,0);
+    while(isspace((unsigned char)*s)) s++;
+    if(*s) return -1;
+    *out=v;
+    return 0;
+}
+
+static void handle_create(const char *arg){
+    char tmp[512]; cpy_cap(tmp, arg, sizeof(tmp));
+    // Strict: exactly two tokens (address, nonce).
+    char *toks[2]; int nt=0;
+    char *p=tmp;
+    while(*p && nt<2){
+        while(isspace((unsigned char)*p) || *p==',') p++;
+        if(!*p) break;
+        toks[nt++]=p;
+        while(*p && !isspace((unsigned char)*p) && *p!=',') p++;
+        if(*p){ *p=0; p++; }
+    }
+    while(isspace((unsigned char)*p) || *p==',') p++;
+    if(nt!=2 || *p){ put_str("error (bad create)\n"); return; }
+    uint8_t addr[20];
+    if(parse_hex_fixed(toks[0], addr, 20)!=0){ put_str("error (bad address)\n"); return; }
+    unsigned long long nonce;
+    if(parse_nonce(toks[1], &nonce)!=0){ put_str("error (bad nonce)\n"); return; }
     uint8_t rlp[64]; int rlen=0;
     uint8_t payload[64]; int plen=0;
     payload[plen++]=0x94; memcpy(payload+plen, addr,20); plen+=20;
@@ -398,7 +445,7 @@ static void handle_create(const char *arg){
         rlp[rlen++]=0xC0 + plen;
         memcpy(rlp+rlen, payload, plen); rlen+=plen;
     } else {
-        put_str("error (rlp)\n"); return;
+        put_str("error (bad rlp)\n"); return; // unreachable: plen <= 31
     }
     uint8_t h[32]; keccak256(rlp, rlen, h);
     put_str("0x");
@@ -407,7 +454,7 @@ static void handle_create(const char *arg){
 }
 
 static void handle_create2(const char *arg){
-    char tmp[512]; strncpy(tmp,arg,sizeof(tmp)-1); tmp[sizeof(tmp)-1]=0;
+    char tmp[512]; cpy_cap(tmp, arg, sizeof(tmp));
     char *tokens[3]; int nt=0;
     char *p=tmp;
     while(*p && nt<3){
@@ -417,7 +464,8 @@ static void handle_create2(const char *arg){
         while(*p && !isspace((unsigned char)*p) && *p!=',') p++;
         if(*p){ *p=0; p++; }
     }
-    if(nt!=3){ put_str("error (bad create2)\n"); return; }
+    while(isspace((unsigned char)*p) || *p==',') p++;
+    if(nt!=3 || *p){ put_str("error (bad create2)\n"); return; }
     uint8_t deployer[20], salt[32], initcodehash[32];
     if(parse_hex_fixed(tokens[0], deployer,20)!=0 || parse_hex_fixed(tokens[1], salt,32)!=0 || parse_hex_fixed(tokens[2], initcodehash,32)!=0){
         put_str("error (bad hex)\n"); return;
@@ -441,14 +489,14 @@ static int load_builtin(const char *name, const uint8_t **code, size_t *len){
 }
 
 static void handle_run(const char *arg){
-    char tmp[4096]; strncpy(tmp,arg,sizeof(tmp)-1); tmp[sizeof(tmp)-1]=0;
+    char tmp[4096]; cpy_cap(tmp, arg, sizeof(tmp));
     char *p=tmp;
     while(isspace((unsigned char)*p)) p++;
     char *name_end=p;
     while(*name_end && !isspace((unsigned char)*name_end)) name_end++;
     if(name_end==p){ put_str("error (bad run)\n"); return; }
     *name_end=0;
-    char name[64]; strncpy(name,p,sizeof(name)-1); name[sizeof(name)-1]=0;
+    char name[64]; cpy_cap(name, p, sizeof(name));
     p=name_end+1;
     while(isspace((unsigned char)*p)) p++;
     char *calldata_str=p;
@@ -469,14 +517,14 @@ static void handle_run(const char *arg){
         char *maybe_chain=tok1_end+1;
         while(*maybe_chain && isspace((unsigned char)*maybe_chain)) maybe_chain++;
         if(*maybe_chain){
-            strncpy(value_str, tok1, sizeof(value_str)-1);
+            cpy_cap(value_str, tok1, sizeof(value_str));
             char *tok2=maybe_chain;
             char *tok2_end=tok2;
             while(*tok2_end && !isspace((unsigned char)*tok2_end)) tok2_end++;
             *tok2_end=0;
-            strncpy(chain_str, tok2, sizeof(chain_str)-1);
+            cpy_cap(chain_str, tok2, sizeof(chain_str));
         } else {
-            strncpy(value_str, tok1, sizeof(value_str)-1);
+            cpy_cap(value_str, tok1, sizeof(value_str));
         }
     }
     uint8_t calldata[4096]; size_t calldata_len=0;
@@ -531,20 +579,20 @@ static void handle_run(const char *arg){
 }
 
 static void handle_cmd(const char *line){
-    char tmp[4096]; strncpy(tmp,line,sizeof(tmp)-1); tmp[sizeof(tmp)-1]=0;
+    char tmp[4096]; cpy_cap(tmp, line, sizeof(tmp));
     char *p=tmp;
     while(isspace((unsigned char)*p)) p++;
     char *cmd_end=p;
     while(*cmd_end && !isspace((unsigned char)*cmd_end)) cmd_end++;
     *cmd_end=0;
-    char cmd[32]; strncpy(cmd,p,sizeof(cmd)-1); cmd[sizeof(cmd)-1]=0;
+    char cmd[32]; cpy_cap(cmd, p, sizeof(cmd));
     char *arg = cmd_end+1;
     if(strcmp(cmd,"eth")==0){
         while(isspace((unsigned char)*arg)) arg++;
         char *sub_end=arg;
         while(*sub_end && !isspace((unsigned char)*sub_end)) sub_end++;
         *sub_end=0;
-        char sub[32]; strncpy(sub,arg,sizeof(sub)-1); sub[sizeof(sub)-1]=0;
+        char sub[32]; cpy_cap(sub, arg, sizeof(sub));
         arg=sub_end+1;
         if(strcmp(sub,"keccak")==0) handle_keccak(arg);
         else if(strcmp(sub,"selector")==0) handle_selector(arg);
@@ -622,8 +670,13 @@ int main(void){
         put('\n');
     }
 }
-#else
+#elif !defined(HOST_FUZZ)
 int main(void){
     return eth_eval();
 }
+#endif
+
+#ifdef HOST_FUZZ
+// Test-only entry point for the host ASan harness (never in firmware images).
+int host_cmd(const char *cmd){ handle_cmd(cmd); return 0; }
 #endif

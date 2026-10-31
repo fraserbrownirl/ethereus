@@ -9,6 +9,8 @@ Two paths, both through the author's code only:
   reference-level bridge check; IR teacher-forcing is gate 2.
 """
 
+from pathlib import Path
+
 import pytest
 
 from chipformer.rv import bridge as BR
@@ -101,8 +103,170 @@ def test_bridge_session_reference(cmd):
     assert _session_value(cmd) == want
 
 
+SELECTOR_VECTORS = [
+    # (sig, selector) — independently known values, not from the generator
+    ("transfer(address,uint256)", "0xa9059cbb\n"),
+    ("balanceOf(address)", "0x70a08231\n"),
+    ("approve(address,uint256)", "0x095ea7b3\n"),
+    ("transferFrom(address,address,uint256)", "0x23b872dd\n"),
+    ("totalSupply()", "0x18160ddd\n"),
+    ("decimals()", "0x313ce567\n"),
+    ("ownerOf(uint256)", "0x6352211e\n"),
+    ("deposit()", "0xd0e30db0\n"),
+    ("withdraw(uint256)", "0x2e1a7d4d\n"),
+]
+
+
+@pytest.mark.parametrize("sig,want", SELECTOR_VECTORS)
+def test_selector_vectors(sig, want):
+    val, st, raw = eth.run_one(f"selector {sig}")
+    assert val == want
+
+
+def test_demo_selectors_all_hit_cache():
+    # Every demo sig must resolve at cache-hit speed (< 8k instr; a keccak
+    # miss costs > 20k). Guards the DROM table against shrinkage.
+    p = Path(__file__).parent / "data" / "eth" / "demo-selectors.txt"
+    sigs = [l.strip() for l in p.read_text().splitlines()
+            if l.strip() and not l.strip().startswith("#")]
+    assert len(sigs) >= 20
+    for sig in sigs:
+        val, st, raw = eth.run_one(f"selector {sig}")
+        assert st["instructions"] < 8000, (sig, st["instructions"])
+        assert val == eth.expected(f"selector {sig}")
+
+
+def test_selector_miss_falls_through():
+    val, st, raw = eth.run_one("selector frobnicateThyWombat(uint256,address)")
+    assert val == eth.expected("selector frobnicateThyWombat(uint256,address)")
+    assert st["instructions"] > 15000  # paid for the keccak
+
+
+ABI_ENCODE_VECTORS = [
+    ("encode transfer(address,uint256) 0x000000000000000000000000000000000000dEaD 100",
+     "0xa9059cbb000000000000000000000000000000000000000000000000000000000000dead0000000000000000000000000000000000000000000000000000000000000064\n"),
+    ("encode balanceOf(address) 0x0000000000000000000000000000000000000001",
+     "0x70a082310000000000000000000000000000000000000000000000000000000000000001\n"),
+    # zero-arg call is valid: selector only
+    ("encode f()", "0x26121ff0\n"),
+    # short bytesN pads right, like eth_abi
+    ("encode f(bytes2) 0x01",
+     "0xa7abdc09" + "01" + "00" * 31 + "\n"),
+]
+
+
+@pytest.mark.parametrize("cmd,want", ABI_ENCODE_VECTORS)
+def test_abi_encode_vectors(cmd, want):
+    val, st, raw = eth.run_one(cmd)
+    assert val == want
+
+
+ABI_ERROR_VECTORS = [
+    # (cmd, firmware error) — single-fault; the oracle must agree exactly.
+    ("encode f(uint8) 256", "error (uint overflow)\n"),
+    ("encode f(uint8) -1", "error (uint overflow)\n"),
+    ("encode f(int8) 128", "error (int overflow)\n"),
+    ("encode f(int8) -129", "error (int overflow)\n"),
+    ("encode f(address) 0x1234", "error (bad address)\n"),
+    ("encode f(bool) maybe", "error (bad bool)\n"),
+    ("encode f(bool) TRUE", "error (bad bool)\n"),
+    ("encode f(bytes2) 0x010203", "error (bad bytes)\n"),
+    ("encode f(bytes2) 0xabc", "error (odd hex)\n"),
+    ("encode f(bytes) 0x123", "error (odd hex)\n"),
+    ("encode f(uint256[2]) [1]", "error (array len)\n"),
+    ("encode f(uint256[]) [1]", "error (unsupported type)\n"),
+    ("encode f(uint7) 1", "error (bad type)\n"),
+    ("encode f(uint08) 1", "error (bad type)\n"),
+    ("encode f(bytes33) 0x01", "error (bad type)\n"),
+    ("encode f(foobar) 1", "error (bad type)\n"),
+    ("encode f(uint256[65]) [1]", "error (array too long)\n"),
+    ("encode f(uint256) 1 2", "error (arg count)\n"),
+    ("encode f(uint256,uint256) 1", "error (arg count)\n"),
+    ("encode f() 1", "error (arg count)\n"),
+    ("encode f(", "error (bad encode)\n"),
+    ("encode 9lives(uint256) 1", "error (bad sig)\n"),
+    ("encode f(uint256,) 1", "error (bad sig)\n"),
+    ("encode " + "f" * 300 + "(uint256) 1", "error (bad sig)\n"),  # sig > 511
+    ("decode uint8 0x1234", "error (bad data)\n"),
+    ("decode uint8 0x" + "00" * 31 + "ff" + "00" * 31 + "02", None),  # valid, below
+    ("decode uint8 0x" + "ff" + "00" * 31, "error (bad padding)\n"),
+    ("decode bool 0x" + "00" * 31 + "02", "error (bad padding)\n"),
+    ("decode uint7 0x" + "00" * 32, "error (bad type)\n"),
+    ("decode string 0x" + "00" * 31 + "20" + "00" * 31 + "01" + "ff" + "00" * 31,
+     "error (bad string)\n"),
+    ("decode nope", "error (bad decode)\n"),
+    ("create 0x1234 7", "error (bad address)\n"),
+    ("create 0x000000000000000000000000000000000000dEaD", "error (bad create)\n"),
+    ("create 0x000000000000000000000000000000000000dEaD 7 8", "error (bad create)\n"),
+    ("create 0x000000000000000000000000000000000000dEaD -1", "error (bad nonce)\n"),
+    ("create 0x000000000000000000000000000000000000dEaD 18446744073709551616",
+     "error (bad nonce)\n"),
+    ("create2 0x000000000000000000000000000000000000dEaD 0x00", "error (bad create2)\n"),
+]
+
+
+@pytest.mark.parametrize("cmd,want", [c for c in ABI_ERROR_VECTORS if c[1] is not None])
+def test_abi_error_vectors(cmd, want):
+    val, st, raw = eth.run_one(cmd)
+    assert val == want
+    assert val == eth.expected(cmd)  # oracle must agree, not just firmware
+
+
+def test_encode_extra_arg_rejected():
+    # Strict: trailing args are an error, never silently ignored.
+    v1, _, _ = eth.run_one("encode f(uint256) 1 2")
+    assert v1 == "error (arg count)\n"
+    v2, _, _ = eth.run_one("encode f() 1")
+    assert v2 == "error (arg count)\n"
+
+
+def test_decode_trailing_data_ignored():
+    v1, _, _ = eth.run_one("decode uint8 0x" + "00" * 31 + "ff" + "00" * 31 + "02")
+    v2, _, _ = eth.run_one("decode uint8 0x" + "00" * 31 + "ff")
+    assert v1 == v2 == "255\n"
+
+
+def test_tiny_fuzz_abi():
+    # Happy path + single-fault error paths; the oracle cross-checks every
+    # value-level rejection against eth_abi itself (xchecks raise on drift).
+    # Generator draws run unfiltered (the non-bridge image runs anything in
+    # eth_in); the 80-token window is enforced in gate runs, not here, since
+    # full-width cases (create2, wide decodes) never fit it.
+    import random
+    rng = random.Random(5)
+    n = 0
+    op_errs: dict[str, int] = {}
+    gens = [eth.selector_cases, eth.encode_cases, eth.decode_cases,
+            eth.create_cases, eth.create2_cases]
+    for gen in gens:
+        for op, cmd, oracle in gen(8, rng):
+            val, st, raw = eth.run_one(cmd)
+            assert val == oracle, (cmd, val, oracle)
+            if oracle.startswith("error "):
+                op_errs[op] = op_errs.get(op, 0) + 1
+            n += 1
+    assert n == 40
+    # Every fault-bearing op must fire its injector (selector never faults).
+    for op in ("encode", "decode", "create", "create2"):
+        assert op_errs.get(op, 0) >= 1, (op, op_errs)
+
+
 def test_instruction_counts_reported():
     # The harness must report per-call instruction counts (the eth-bench input).
     _, st, _ = eth.run_one("keccak 0x")
     assert st["instructions"] > 1000
     assert 1.0 < st["tokens"] / st["instructions"] < 3.0
+
+
+def test_dispatch_budget():
+    # Profiler in the test flow: dispatch ('foo', no eval) must stay at
+    # calc.c scale. The 2026-10-31 strncpy-padding regression (16,920 instr,
+    # 97% memset) must fail HERE, not in review. Deterministic machine.
+    import shutil
+    if not shutil.which("riscv64-elf-nm"):
+        pytest.skip("riscv64-elf-nm required")
+    from chipformer.rv import profile as P
+    counts, out, steps = P.histogram("foo")
+    assert out == "error (unknown cmd)\n"
+    assert steps <= 600, f"dispatch budget blown: {steps}"
+    assert counts.get("memset", 0) <= 50, dict(counts)
