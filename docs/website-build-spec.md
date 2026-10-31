@@ -1,4 +1,4 @@
-# Ethputer Website — Build Spec for Agents
+# Ethereus Website — Build Spec for Agents
 
 Oct 31, 2026 · @Fraser Brown
 
@@ -14,7 +14,7 @@ Three audiences, in priority order:
 
 What the site is not: a token page, a waitlist funnel, or a general "AI × crypto" pitch. No token, no fundraising copy, no roadmap dates beyond what the build spec commits to.
 
-Tone: plain, specific, numeric. Every claim either carries a number with a source or is phrased as what the build is designed to do. The companion document, *Ethputer — Build Spec for Agents*, is the source of truth for every technical statement; where this spec and that one disagree, the build spec wins.
+Tone: plain, specific, numeric. Every claim either carries a number with a source or is phrased as what the build is designed to do. The companion document, *Ethereus — Build Spec for Agents*, is the source of truth for every technical statement; where this spec and that one disagree, the build spec wins.
 
 ## Site map
 
@@ -48,19 +48,19 @@ Under the buttons, one line: *Built on Qwenputer: a RISC-V CPU compiled into Qwe
 
 **The three things** (three columns or stacked cards; each has a title, one paragraph, one proof line)
 
-1. **A guardrail a prompt can't reach.** Every agent wallet today enforces its spending policy outside the model: a prompt, a middleware, a server. All of them can be talked around. Ethputer checks the transaction on positions in the token stream that the language model's layers physically cannot write. "The monitor is off" is just text; the circuit doesn't read it. The policy is public, fixed in the weights, and every approval is a replayable trace. Proof line: *\[50\] injection prompts, \[0\] forged approvals.*
+1. **A guardrail a prompt can't reach.** Every agent wallet today enforces its spending policy outside the model: a prompt, a middleware, a server. All of them can be talked around. Ethereus checks the transaction on positions in the token stream that the language model's layers physically cannot write. "The monitor is off" is just text; the circuit doesn't read it. The policy is public, fixed in the weights, and every approval is a replayable trace. Proof line: *\[50\] injection prompts, \[0\] forged approvals.*
 2. **Exact, and provable.** Agents hallucinate selectors, decimals and wei math. A Python tool fixes that, but then the agent trusts whatever the server sends back. Here keccak, ABI encoding and uint256 arithmetic run inside the forward pass and the trace is the proof. The original Qwenputer replayed \~230,000 circuit positions through a reference machine with zero mismatches. Proof line: *\[2,000\] random cases, \[0\] wrong answers, replay clean.*
-3. **Knowledge that costs no context.** Models get Ethereum wrong: gas prices, EIP status, L2 costs. The ethskills knowledge base fixes that at \~50k tokens of context per conversation. Ethputer holds it in the model's own recurrent state: zero context cost, and a version a prompt injection can't swap. Proof line: *\[60\]-question Ethereum benchmark: base \[x\]%, Ethputer \[y\]%, at zero added context.*
+3. **Knowledge that costs no context.** Models get Ethereum wrong: gas prices, EIP status, L2 costs. The ethskills knowledge base fixes that at \~50k tokens of context per conversation. Ethereus holds it in the model's own recurrent state: zero context cost, and a version a prompt injection can't swap. Proof line: *\[60\]-question Ethereum benchmark: base \[x\]%, Ethereus \[y\]%, at zero added context.*
 
 **How it works** (short version; the full page is `/how-it-works`)
 
-Qwen3.5 mixes attention layers with Gated DeltaNet layers, and each DeltaNet head keeps a 128 × 128 state matrix it updates every token. With a one-hot key and the gate held open, an update overwrites exactly one row. That's a RAM write. A one-hot query reads it back. That's a RAM read. Qwenputer builds a 32-bit RISC-V CPU out of eleven such layers, with its registers, memory and program counter living in that state. Ethputer writes firmware for that CPU: keccak, ABI, uint256, a small EVM, a signing-policy check. When the model calls a tool, the circuit runs the firmware and writes the answer itself, token by token. \[Diagram here: see How it works section.\]
+Qwen3.5 mixes attention layers with Gated DeltaNet layers, and each DeltaNet head keeps a 128 × 128 state matrix it updates every token. With a one-hot key and the gate held open, an update overwrites exactly one row. That's a RAM write. A one-hot query reads it back. That's a RAM read. Qwenputer builds a 32-bit RISC-V CPU out of eleven such layers, with its registers, memory and program counter living in that state. Ethereus writes firmware for that CPU: keccak, ABI, uint256, a small EVM, a signing-policy check. When the model calls a tool, the circuit runs the firmware and writes the answer itself, token by token. \[Diagram here: see How it works section.\]
 
 **Evidence strip** (one row of four numbers, each with a caption and a source link)
 
 - **0** mismatches in \[230k\] replayed circuit positions — Qwenputer
 - **\[3,700\]** instructions/s on one L4 — the compiled CPU's speed
-- **\[0\]** forged approvals in \[50\] injection attempts — Ethputer policy gate
+- **\[0\]** forged approvals in \[50\] injection attempts — Ethereus policy gate
 - **\~\[6\]e-4** KL vs base Qwen on plain text — the model's language behaviour is unchanged
 
 **Roadmap teaser**
@@ -69,7 +69,7 @@ Qwen3.5 mixes attention layers with Gated DeltaNet layers, and each DeltaNet hea
 
 **Credits block (home)**
 
-*Ethputer stands on Qwenputer by Divyansh Agrawal, nesformer by Drew Breunig, and ethskills by Austin Griffith. Code MIT, weights Apache-2.0.* → `/credits`
+*Ethereus stands on Qwenputer by Divyansh Agrawal, nesformer by Drew Breunig, and ethskills by Austin Griffith. Code MIT, weights Apache-2.0.* → `/credits`
 
 ## How it works page
 
@@ -81,7 +81,7 @@ Five sections, each a heading, two to four short paragraphs, and one figure wher
 
 **3. The tool bridge and who owns which positions.** Qwen writes a `<tool_call>` block exactly as it would for any tool. Nothing outside the model runs it. The compiled layers read the call text, run the firmware, and write the `<tool_response>` themselves, one token at a time. During those positions the circuit owns the output and Qwen's own layers are frozen; everywhere else, Qwen predicts. That ownership is recorded per token, and it is what makes the policy gate unforgeable: an approval is only valid on a circuit-owned position. \[Figure B\]
 
-**4. Why the answers are exact.** The circuit's arithmetic is exact in bf16 by construction, and every circuit token is checked in lockstep against a reference machine. Qwenputer replayed about 230,000 output positions with zero mismatches, and the model's plain-text behaviour stays within noise of base Qwen (KL 6e-4 against a 5e-4 floor). Ethputer inherits all of that; it adds firmware, not weights.
+**4. Why the answers are exact.** The circuit's arithmetic is exact in bf16 by construction, and every circuit token is checked in lockstep against a reference machine. Qwenputer replayed about 230,000 output positions with zero mismatches, and the model's plain-text behaviour stays within noise of base Qwen (KL 6e-4 against a 5e-4 floor). Ethereus inherits all of that; it adds firmware, not weights.
 
 **5. What it costs.** About 1.3 trace tokens per instruction and \~3,700 instructions per second on one L4. A keccak takes seconds, an ERC-20 call tens of seconds, a Merkle proof minutes. A tool call can carry about 80 tokens of input; anything larger (bytecode, proofs, skills) lives in the in-weight filesystem. These are the limits of a 4B model with a compiled 32-bit CPU, not of the idea. \[Link to the limits table in the build spec.\]
 
@@ -97,7 +97,7 @@ The page makes one argument: *the firmware is finished once; the backbone is swa
 
 **Figure C, "Same firmware, bigger brain"** (SVG timeline, four nodes left to right, a constant bar underneath): nodes *Qwen3.5-4B* → *Qwen3.5 (larger)* → *Kimi Linear 48B-A3B* → *Kimi K3 (2.8T, 104B active)*. Under all four, one unbroken bar labelled *eth · files · sign · verify firmware — unchanged*. Each node has a one-line label beneath: *runs today* / *same compiler, wider merge* / *KDA port, MoE placement* / *sidecar executor, no re-merge*. Status chip on each node.
 
-**Step 1 — Qwen3.5-4B (today).** The published Qwenputer checkpoint. Ethputer's firmware runs on it unchanged. A 4B model is a modest reasoner, but every guarantee on this site is already true here: unforgeable policy, exact arithmetic, zero-context knowledge.
+**Step 1 — Qwen3.5-4B (today).** The published Qwenputer checkpoint. Ethereus's firmware runs on it unchanged. A 4B model is a modest reasoner, but every guarantee on this site is already true here: unforgeable policy, exact arithmetic, zero-context knowledge.
 
 **Step 2 — a larger Qwen3.5.** Same compiler, same merge script; only the width changes. This is a better reasoner on the same firmware with no new research, and it proves the compiled layers survive a bigger backbone.
 
@@ -105,7 +105,7 @@ The page makes one argument: *the firmware is finished once; the backbone is swa
 
 **Step 4 — Kimi K3.** 2.8 trillion parameters, 104 billion active, three KDA layers for every attention layer, open weights. Because the executor already runs the circuit outside the backbone's own modules and injects the result, the circuit can run as a sidecar on one GPU beside a multi-node K3; no 2.8T re-save. A frontier-class reasoner that still cannot forge an approval or get a keccak wrong.
 
-**What never changes** (closing block): the firmware, the four tools, the tests, the policy format, the attestation. A reader should leave knowing that choosing Ethputer today does not lock them to a 4B model.
+**What never changes** (closing block): the firmware, the four tools, the tests, the policy format, the attestation. A reader should leave knowing that choosing Ethereus today does not lock them to a 4B model.
 
 Source links at the bottom: Kimi K3 technical report (arXiv 2607.24653), Kimi Linear paper (arXiv 2510.26692), Qwenputer repo.
 
@@ -130,7 +130,7 @@ Source links at the bottom: Kimi K3 technical report (arXiv 2607.24653), Kimi Li
 **Repo layout.**
 
 ```
-ethputer-site/
+ethereus-site/
   src/pages/        index.astro, how-it-works.md, roadmap.astro, build.astro, credits.md
   src/components/   Nav, Footer, Claim, EvidenceStrip, StatusChip, Figure
   src/figures/      fig-a-row-is-a-byte.svg, fig-b-who-writes.svg, fig-c-roadmap.svg
@@ -147,7 +147,7 @@ ethputer-site/
 
 **Claims policy.** The site is read by people who will check. Rules:
 
-- A number appears only with a source link and a `measured_on` date in `evidence.json`. Qwenputer's numbers (230k replayed positions, KL 6e-4, 3,700 instr/s) are cited to its README and `rv32.md`; Ethputer's numbers come from `docs/eth-bench.md` in the build repo.
+- A number appears only with a source link and a `measured_on` date in `evidence.json`. Qwenputer's numbers (230k replayed positions, KL 6e-4, 3,700 instr/s) are cited to its README and `rv32.md`; Ethereus's numbers come from `docs/eth-bench.md` in the build repo.
 - Until a phase passes its gate, its claims are written as design intent ("is designed to", "will") and its evidence slot shows "not yet measured". No placeholder numbers ship.
 - "Unforgeable" and "cannot" are used only for the position-ownership property, which is a mechanical fact of the bridge. Everything else is "exact on N cases" or "0 of N".
 - Nothing on the site claims audit status, security certification, or suitability for custody of real funds. Footer disclaimer: *Research software. Not audited. Do not use with keys that control funds you cannot lose.*
@@ -155,7 +155,7 @@ ethputer-site/
 
 **Credits page content** (`credits.json`, rendered as a list with links):
 
-| Work | Author | What Ethputer takes from it | License |
+| Work | Author | What Ethereus takes from it | License |
 | --- | --- | --- | --- |
 | [Qwenputer](https://github.com/divagr18/qwenputer) | Divyansh Agrawal | The compiler, the RISC-V CPU, the bridge, the filesystem, every mechanism number | MIT (code), Apache-2.0 (weights) |
 | [nesformer](https://github.com/dbreunig/nesformer) | Drew Breunig | The standalone tiny-model development pattern and the host-side split | MIT |
@@ -165,9 +165,9 @@ ethputer-site/
 
 Authors are named exactly as they name themselves in their repos. No photos of any person on the site.
 
-**Assets to produce.** Three SVG figures (A, B, C), an OG image (1200 × 630, the headline and Figure B at small size), a favicon (a single highlighted row from Figure A), and a plain-text logotype "Ethputer" in the body typeface. No illustrations beyond these. Do not reuse images from the Qwenputer repo; redraw.
+**Assets to produce.** Three SVG figures (A, B, C), an OG image (1200 × 630, the headline and Figure B at small size), a favicon (a single highlighted row from Figure A), and a plain-text logotype "Ethereus" in the body typeface. No illustrations beyond these. Do not reuse images from the Qwenputer repo; redraw.
 
-**Name and domain.** Working name *Ethputer*. Check the GitHub handle and a `.dev` or `.xyz` domain before launch; if taken, the name changes and the spec is updated, nothing else does.
+**Name and domain.** Working name *Ethereus*. Check the GitHub handle and a `.dev` or `.xyz` domain before launch; if taken, the name changes and the spec is updated, nothing else does.
 
 **Legal.** Site content CC BY 4.0; code in the site repo MIT. Link both licenses in the footer.
 
@@ -183,7 +183,7 @@ Authors are named exactly as they name themselves in their repos. No photos of a
 - [ ] Lighthouse ≥ 95 on performance, accessibility, best practices, SEO, on mobile.
 - [ ] Footer carries the research-software disclaimer and both licenses.
 - [ ] Credits page names all five works with working links.
-- [ ] A fresh reader (someone not on the project) reads the home page and can say in one sentence what Ethputer guarantees and why. Run this once before launch.
+- [ ] A fresh reader (someone not on the project) reads the home page and can say in one sentence what Ethereus guarantees and why. Run this once before launch.
 
 **Working rules for the site agent.**
 
@@ -197,4 +197,4 @@ Authors are named exactly as they name themselves in their repos. No photos of a
 - [ ] Whether `/build` shows the hackathon track (dates, rules) or stays a pure "run the code" page in v1.
 - [ ] Whether Phase 3's policy gate ships before or after the site launches; if after, the guardrail claim ships as design intent with its evidence slot empty.
 
-Source docs: *Ethputer — Build Spec for Agents* (this workspace); [Qwenputer](https://github.com/divagr18/qwenputer); [nesformer](https://github.com/dbreunig/nesformer); [ethskills](https://github.com/austintgriffith/ethskills); [Kimi K3 report](https://arxiv.org/abs/2607.24653); [Kimi Linear](https://arxiv.org/abs/2510.26692).
+Source docs: *Ethereus — Build Spec for Agents* (this workspace); [Qwenputer](https://github.com/divagr18/qwenputer); [nesformer](https://github.com/dbreunig/nesformer); [ethskills](https://github.com/austintgriffith/ethskills); [Kimi K3 report](https://arxiv.org/abs/2607.24653); [Kimi Linear](https://arxiv.org/abs/2510.26692).
