@@ -1,0 +1,12 @@
+# 4byte.directory verification of selectors.txt
+# generated: 2026-10-31T16:30:07Z
+# command: .venv/bin/python scripts/verify_selectors.py
+# policy: every line must reverse-resolve or be dropped (a wrong cached
+# selector would shadow the keccak fallthrough)
+
+225 signatures to verify
+  ... 50/225
+  ... 100/225
+  ... 150/225
+  ... 200/225
+225/225 verified
