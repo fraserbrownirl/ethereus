@@ -177,16 +177,18 @@ def verify_snapshot(T, man, cfg, snap_path, get_name=None):
     exp = gs.toks[gown[0] + 1:]
     print(f"get {get_name}: {len(exp)} body tokens to generate", flush=True)
     model, lay, ids = hf.build_model(c, gs.toks)
-    model = model.eval()
+    # fla's kernels need the GPU when it is installed
+    dev = "cuda" if torch.cuda.is_available() else "cpu"
+    model = model.eval().to(dev)
     dims = list(range(1, len(c.dims)))
     cols = [lay.dim(d) for d in dims]
     nl = c.n_layers()
     with torch.no_grad():
-        o = model(input_ids=torch.tensor([[ids[None]]]), use_cache=True)
+        o = model(input_ids=torch.tensor([[ids[None]]], device=dev), use_cache=True)
         cache = o.past_key_values
         hf.inject(c, cache)
         for t in gs.toks[: gown[0] + 1]:  # call + its TCC only
-            o = model(input_ids=torch.tensor([[ids[t]]]),
+            o = model(input_ids=torch.tensor([[ids[t]]], device=dev),
                       past_key_values=cache, use_cache=True,
                       output_hidden_states=True)
             cache = o.past_key_values
@@ -199,7 +201,7 @@ def verify_snapshot(T, man, cfg, snap_path, get_name=None):
             gen.append(nxt)
             if j % 100 == 0:
                 print(f"  generated {j}/{len(exp)}", flush=True)
-            o = model(input_ids=torch.tensor([[ids[nxt]]]),
+            o = model(input_ids=torch.tensor([[ids[nxt]]], device=dev),
                       past_key_values=cache, use_cache=True,
                       output_hidden_states=True)
             cache = o.past_key_values
