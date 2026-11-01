@@ -2,6 +2,8 @@
 
 A call over the window has each 0x-hex argument over ARG_TOKENS tokens replaced by ``@spill/<n>``
 and its bytes written to the firmware's file buffer. The firmware's ``file_arg`` resolves the name.
+The rewritten command itself goes to ``eth_in``: generation restarts from a snapshot, which clears
+the circuit's capture, so the firmware reads the command from RAM and not from the captured text.
 One implementation, used standalone and in the worker. Knows nothing about HTTP.
 """
 
@@ -16,6 +18,7 @@ from chipformer.rv import elf, ref
 WINDOW = 80  # S.CAP_MAX: tokens the bridge captures between <tool_call> and </tool_call>
 ARG_TOKENS = 32
 FILE_BUF, FILE_BUF_SIZE = 0x900, 4096  # .filebuf in eth-bridge.elf (env/eth/eth.c)
+ETH_IN, ETH_IN_SIZE = 0x100, 2048  # eth_in: a command here wins over the captured call, once
 CMD = re.compile(r"<function=eth>\s*<parameter=cmd>\n?(.*?)\n?</parameter>\s*</function>", re.DOTALL)
 HEX = re.compile(r"0x[0-9a-fA-F]+\Z")
 
@@ -54,27 +57,38 @@ def file_blob(files: dict[str, str]) -> bytes:
     return blob
 
 
-def firmware_with_files(firmware, files: dict[str, str]) -> Path:
-    """A temporary copy of the ELF with ``files`` in .filebuf, so generate, the lockstep reference
-    and replay all load the same machine through the ordinary loader. ``firmware`` when empty."""
-    if not files:
+def firmware_with_files(firmware, files: dict[str, str], cmd: str | None = None) -> Path:
+    """A temporary copy of the ELF with ``files`` in .filebuf and ``cmd`` in eth_in, so generate,
+    the lockstep reference and replay all load the same machine through the ordinary loader.
+    ``firmware`` itself when there is nothing to write."""
+    if not files and cmd is None:
         return Path(firmware)
     data = bytearray(Path(firmware).read_bytes())
     assert data[:5] == b"\x7fELF\x01", "RV32 ELF expected"
+    if files:
+        _write(data, firmware, FILE_BUF, FILE_BUF_SIZE, file_blob(files))
+    if cmd is not None:
+        b = cmd.encode() + b"\0"
+        if len(b) > ETH_IN_SIZE:
+            raise ValueError(f"spill: {len(b)} byte command over the {ETH_IN_SIZE} byte eth_in")
+        _write(data, firmware, ETH_IN, ETH_IN_SIZE, b)
+    f = tempfile.NamedTemporaryFile(prefix="eth-spill-", suffix=".elf", delete=False)
+    f.write(data)
+    f.close()
+    return Path(f.name)
+
+
+def _write(data: bytearray, firmware, addr: int, size: int, blob: bytes) -> None:
     phoff, phentsize, phnum = (struct.unpack_from("<I", data, 28)[0],
                                struct.unpack_from("<H", data, 42)[0],
                                struct.unpack_from("<H", data, 44)[0])
-    blob = file_blob(files)
     for i in range(phnum):
         kind, off, vaddr, _, filesz = struct.unpack_from("<5I", data, phoff + i * phentsize)
-        if kind == 1 and vaddr <= FILE_BUF and FILE_BUF + FILE_BUF_SIZE <= vaddr + filesz:
-            at = off + FILE_BUF - vaddr
+        if kind == 1 and vaddr <= addr and addr + size <= vaddr + filesz:
+            at = off + addr - vaddr
             data[at:at + len(blob)] = blob
-            f = tempfile.NamedTemporaryFile(prefix="eth-spill-", suffix=".elf", delete=False)
-            f.write(data)
-            f.close()
-            return Path(f.name)
-    raise ValueError(f"{firmware} has no loaded .filebuf at {FILE_BUF:#x}")
+            return
+    raise ValueError(f"{firmware} has no loaded buffer at {addr:#x}")
 
 
 def parked(firmware) -> "ref.Machine":

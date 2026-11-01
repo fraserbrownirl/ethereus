@@ -21,6 +21,7 @@ Usage (from experimental/riscv):
 import argparse
 import random
 import re
+import sys
 import time
 from pathlib import Path
 
@@ -43,24 +44,54 @@ except ImportError:  # pragma: no cover
 ELF = Path(__file__).parents[2] / "tests" / "data" / "rv" / "eth.elf"
 BRIDGE_ELF = Path(__file__).parents[2] / "tests" / "data" / "rv" / "eth-bridge.elf"
 ETH_IN, ETH_IN_SIZE = 0x100, 2048
+FILE_BUF, FILE_BUF_SIZE = 0x900, 4096
 
 OPS = ["keccak", "u256"]
 ALL_OPS = ["keccak", "u256", "selector", "encode", "decode", "create", "create2", "run"]
 
-def machine(cmd: str, path=ELF) -> ref.Machine:
-    """The non-bridge firmware's snapshot with the cmd line in eth_in (cf calc.py)."""
-    m = ref.Machine.from_program(elfmod.program(path))
-    b = cmd.encode() + b"\0"
-    assert len(b) <= ETH_IN_SIZE, f"cmd too long for eth_in: {len(b)}"
+def _poke(m: ref.Machine, base: int, b: bytes):
     for i, x in enumerate(b):
-        a = ETH_IN + i
+        a = base + i
         w = a >> 2
         m.ram[w] = m.ram[w] & ~(0xFF << 8 * (a & 3)) | x << 8 * (a & 3)
+
+
+def machine(cmd: str, path=None) -> ref.Machine:
+    """The non-bridge firmware's snapshot with the cmd line in eth_in (cf calc.py)."""
+    m = ref.Machine.from_program(elfmod.program(path or ELF))
+    b = cmd.encode() + b"\0"
+    assert len(b) <= ETH_IN_SIZE, f"cmd too long for eth_in: {len(b)}"
+    _poke(m, ETH_IN, b)
     return m
 
 
-def run(cmd: str, path=ELF) -> tuple[str, list[int]]:
+def run(cmd: str, path=None) -> tuple[str, list[int]]:
     m = machine(cmd, path)
+    toks = m.run(3 * 10**6)
+    assert m.halted and m.fault is None, (cmd, m.fault, m.out)
+    return m.out.decode(), toks
+
+
+def machine_with_files(cmd: str, files: dict[str, str], path=None) -> ref.Machine:
+    """machine() plus bridge-resolved @file args poked into file_buf.
+
+    files maps name -> hex content; written as name\\0hex\\0 pairs plus a
+    final NUL. Large arguments never go through the token window (same
+    mechanism as the API gateway's spill).
+    """
+    m = machine(cmd, path)
+    blob = b""
+    for name, content in files.items():
+        assert "\0" not in name and "\0" not in content
+        blob += name.encode() + b"\0" + content.encode() + b"\0"
+    blob += b"\0"
+    assert len(blob) <= FILE_BUF_SIZE, f"files too big: {len(blob)}"
+    _poke(m, FILE_BUF, blob)
+    return m
+
+
+def run_with_files(cmd: str, files: dict[str, str], path=None) -> tuple[str, list[int]]:
+    m = machine_with_files(cmd, files, path)
     toks = m.run(3 * 10**6)
     assert m.halted and m.fault is None, (cmd, m.fault, m.out)
     return m.out.decode(), toks
@@ -127,10 +158,24 @@ def _parse_keccak_hex_or_text(s: str) -> bytes:
         return s[1:-1].encode()
     return s.encode()
 
+class ByDesign(BaseException):
+    """The firmware rejects this input as a decision of ours, stricter than eth_abi or hashlib would
+    be. There is nothing to compare: the gate asserts an error and never asks the oracle's libraries."""
+
+
+REJECT = "<rejected by design>"
+
+
+def agrees(got: str, oracle: str) -> bool:
+    return got.startswith("error") if oracle == REJECT else got == oracle
+
+
 def expected_keccak(arg: str) -> str:
     # Mirror handle_keccak exactly: trim, hex? (odd/invalid -> bad hex), quoted?
     # (len>=2), else raw; the 1100 cap applies to DECODED data length.
     a = arg.strip()
+    if not a or a.startswith("@"):  # @name is a file argument; with no such file, an error
+        raise ByDesign
     data = _parse_keccak_hex_or_text(a)
     if data is None:
         return "error (bad hex)\n"
@@ -155,9 +200,12 @@ def _parse_u256_token(tok: str) -> int | None:
     if tok.lstrip("-+").isdigit():
         # decimal: two's complement from signed string, then & MASK
         try:
-            return int(tok) & MASK256
+            v = int(tok)
         except ValueError:
             return None
+        if abs(v) > MASK256:
+            raise ByDesign
+        return v & MASK256
     return None
 
 # Shunting-yard in Python matching firmware's prec table exactly
@@ -362,10 +410,28 @@ def _keccak_hex(b: bytes) -> str:
     return _k(b).hex()
 
 
+def _sig_shape_ok(s: str) -> bool:
+    if s[0] == "(":
+        return False
+    depth, seen = 0, False
+    for c in s:
+        if c == "(":
+            depth, seen = depth + 1, True
+        elif c == ")":
+            depth -= 1
+            if depth < 0:
+                return False
+        elif seen and depth == 0 and c not in " \t\n\r\v\f":
+            return False
+    return seen and depth == 0
+
+
 def expected_selector(arg: str) -> str:
-    t = arg[:255].lstrip()
+    t = arg.strip(" \t\n\r\v\f")
     if not t:
         return "error (bad sig)\n"
+    if len(arg) > 255 or not _sig_shape_ok(t):
+        raise ByDesign
     return "0x" + _keccak_hex(re.sub(r"[ \t\n\r\v\f]+", "", t).encode())[:8] + "\n"
 
 
@@ -612,6 +678,8 @@ def _encode_value(tp: str, arg: str):
             return None, "bad hex"
         if len(t) % 2:
             return None, "odd hex"
+        if len(t) < 2 * n:
+            raise ByDesign
         if len(t) > 2 * n:
             return None, "bad bytes"
         return bytes.fromhex(t), None
@@ -945,7 +1013,14 @@ def expected_create2(arg: str) -> str:
 # Command dispatch
 
 def expected(cmd: str) -> str:
-    """Python oracle for one eth cmd line. Returns what the firmware's TEXT section prints."""
+    """Python oracle for one eth cmd line: what the firmware prints, or REJECT. Check with agrees()."""
+    try:
+        return _expected(cmd)
+    except ByDesign:
+        return REJECT
+
+
+def _expected(cmd: str) -> str:
     parts = cmd.strip().split(None, 1)
     if not parts:
         return "error (unknown cmd)\n"
@@ -1394,12 +1469,13 @@ def create2_cases(n: int, rng: random.Random):
 CAP_TOKENS, CAP_ROW_BYTES = 80, 16
 
 
-def cases(n: int, seed: int = 0, only: list[str] | None = None, stats: dict | None = None):
+def cases(n: int, seed: int = 0, only: list[str] | None = None, stats: dict | None = None, window: bool = True):
     """n ACCEPTED cases per op, interleaved round-robin.
 
     Every draw is sized with the Qwen tokenizer; draws over the capture window
     are rejected the way the bridge firmware would (it prints "error (too long)")
-    and counted in stats[op] = [over_tokens, over_rowbytes, drawn].
+    and counted in stats[op] = [over_tokens, over_rowbytes, drawn]. window=False runs them
+    too, up to what eth_in holds: a spilled command reaches the firmware without the window.
     """
     rng = random.Random(seed)
     want = only or OPS
@@ -1431,10 +1507,12 @@ def cases(n: int, seed: int = 0, only: list[str] | None = None, stats: dict | No
                 ntok, wide = captured_size(cmd)
                 if ntok > CAP_TOKENS:
                     over_tok += 1
-                    continue
-                if wide > CAP_ROW_BYTES:
+                    if window or len(cmd.encode()) >= ETH_IN_SIZE:
+                        continue
+                elif wide > CAP_ROW_BYTES:
                     over_row += 1
-                    continue
+                    if window or len(cmd.encode()) >= ETH_IN_SIZE:
+                        continue
                 acc.append((cand_op, cmd, oracle))
                 if len(acc) >= n:
                     break
@@ -1446,6 +1524,47 @@ def cases(n: int, seed: int = 0, only: list[str] | None = None, stats: dict | No
         for op, _ in gens:
             if i < len(per_op[op]):
                 yield per_op[op][i]
+
+
+def boundary_cases():
+    """Every intN and uintN at min, max, max+1, min-1, in decimal and in hex; every bytesN at N and N+1 bytes.
+
+    Hex ints are 256-bit two's complement, so a negative is sign-extended: int8's min is 0xff..80 and
+    min-1 is 0xff..7f. int256 fills all 64 digits, so its max+1 is its min and min-1 its max; its
+    out-of-range forms are 65 digits.
+
+    Out of range must be an error, asserted and not compared. In range is compared with eth_abi
+    directly, not with expected(). Never sized against the window: spill reaches past it."""
+    from eth_abi import encode as abi_encode
+
+    def ok(tp, v):
+        return "0x" + _keccak_hex(f"f({tp})".encode())[:8] + abi_encode([tp], [v]).hex() + "\n"
+
+    for bits in range(8, 257, 8):
+        for tp, lo, hi in ((f"uint{bits}", 0, 2**bits - 1), (f"int{bits}", -(2 ** (bits - 1)), 2 ** (bits - 1) - 1)):
+            yield f"encode f({tp}) {lo}", ok(tp, lo)
+            yield f"encode f({tp}) {hi}", ok(tp, hi)
+            yield f"encode f({tp}) {hi + 1}", REJECT
+            yield f"encode f({tp}) {lo - 1}", REJECT
+    for bits in range(8, 257, 8):
+        tp, hi = f"uint{bits}", 2**bits - 1
+        yield f"encode f({tp}) 0x0", ok(tp, 0)
+        yield f"encode f({tp}) {hi:#x}", ok(tp, hi)
+        yield f"encode f({tp}) {hi + 1:#x}", REJECT
+        yield f"encode f({tp}) -0x1", REJECT
+        tp, hi, lo = f"int{bits}", 2 ** (bits - 1) - 1, -(2 ** (bits - 1))
+        yield f"encode f({tp}) {hi:#x}", ok(tp, hi)
+        yield f"encode f({tp}) {2**256 + lo:#x}", ok(tp, lo)
+        if bits == 256:
+            yield f"encode f({tp}) {2**256:#x}", REJECT
+            yield f"encode f({tp}) {2**256 + 2**255:#x}", REJECT
+        else:
+            yield f"encode f({tp}) {hi + 1:#x}", REJECT
+            yield f"encode f({tp}) {2**256 + lo - 1:#x}", REJECT
+    for n in range(1, 33):
+        tp = f"bytes{n}"
+        yield f"encode f({tp}) 0x{'ab' * n}", ok(tp, b"\xab" * n)
+        yield f"encode f({tp}) 0x{'ab' * (n + 1)}", REJECT
 
 
 # ---------------------------------------------------------------------------
@@ -1466,7 +1585,12 @@ def main():
     ap.add_argument("--only", type=str, default="keccak,u256", help="comma-separated ops from keccak,u256,selector,encode,decode,create,create2,run")
     ap.add_argument("--expr", type=str, default=None, help="single cmd, e.g. 'keccak 0x6161' or 'u256 2**255 - 1'")
     ap.add_argument("--cases-per-op", type=int, default=None)
+    ap.add_argument("--no-window", action="store_true", help="also run cases over the 80-token window, as eth_in allows")
+    ap.add_argument("--elf", type=str, default=None, help="firmware image to test instead of tests/data/rv/eth.elf")
     args = ap.parse_args()
+    if args.elf:
+        global ELF
+        ELF = Path(args.elf)
 
     # --expr: single shot with stats (sized, but run regardless of the window)
     if args.expr:
@@ -1475,8 +1599,8 @@ def main():
         oracle = expected(cmd)
         ntok, wide = captured_size(cmd)
         win = "in-window" if ntok <= CAP_TOKENS and wide <= CAP_ROW_BYTES else "OVER-WINDOW"
-        print(repr(val), "ok" if val == oracle else "MISMATCH", st, f"({ntok} tok, {wide}B max, {win})")
-        if val != oracle:
+        print(repr(val), "ok" if agrees(val, oracle) else "MISMATCH", st, f"({ntok} tok, {wide}B max, {win})")
+        if not agrees(val, oracle):
             print(" expected:", repr(oracle))
             print(" raw out:", repr(raw.decode()[:2000]))
         return
@@ -1487,12 +1611,12 @@ def main():
         ap.error("--cases N required (or --expr)")
     t0 = time.time()
     per: dict[str, list[int]] = {op: [0, 0, 0] for op in (only or OPS)}  # count, instr, tokens
-    bad = 0
+    bad = rejected = 0
     bad_samples: list[tuple[str, str, str]] = []
     # n accepted cases per op (spec "2000 per cmd"); over-window draws are rejected
     # by the tokenizer sizer and counted in stats, never run.
     stats: dict[str, list[int]] = {}
-    gen = cases(n, args.seed, only, stats)
+    gen = cases(n, args.seed, only, stats, window=not args.no_window)
 
     total_expected = 0
     for op, cmd, oracle in gen:
@@ -1503,7 +1627,8 @@ def main():
         per[op][0] += 1
         per[op][1] += st["instructions"]
         per[op][2] += st["tokens"]
-        if val != oracle:
+        rejected += oracle == REJECT
+        if not agrees(val, oracle):
             bad += 1
             if len(bad_samples) < 10:
                 bad_samples.append((cmd, repr(val), repr(oracle)))
@@ -1511,8 +1636,22 @@ def main():
             if bad <= 3:
                 print(" raw:", repr(raw.decode()[:2000]))
 
+    if "encode" in (only or OPS):
+        nb = bb = 0
+        for cmd, want in boundary_cases():
+            nb += 1
+            total_expected += 1
+            val, _, _ = run_one(cmd)
+            if not agrees(val, want):
+                bad += 1
+                bb += 1
+                if len(bad_samples) < 10:
+                    bad_samples.append((cmd, repr(val), repr(want)))
+                print(f"MISMATCH boundary {cmd!r} got={val!r} want={want!r}")
+        print(f"boundary slice: {nb} cases, {bb} mismatches")
+
     elapsed = time.time() - t0
-    print(f"{total_expected} cases ({', '.join(f'{op} {per[op][0]}' for op in per)}), {bad} mismatches ({elapsed:.1f} s)")
+    print(f"{total_expected} cases ({', '.join(f'{op} {per[op][0]}' for op in per)}), {bad} mismatches ({elapsed:.1f} s), {rejected} rejected by design, asserted as errors")
     for op in per:
         cnt, instr, toks = per[op]
         if cnt:
@@ -1528,6 +1667,7 @@ def main():
         print(f"GATE 1 FAIL: {bad}/{total_expected} mismatches")
         for cmd, got, want in bad_samples[:5]:
             print(f"  e.g. {cmd!r} got {got} want {want}")
+        sys.exit(1)
 
 if __name__ == "__main__":
     main()
