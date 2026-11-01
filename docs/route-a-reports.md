@@ -74,3 +74,17 @@ Spend: 58623317 **08:02 UTC = 2.20h ($2.22) @ $1.01/h** since 05:50 UTC; $150 ca
 
 Pushed `route-a` as report stream.
 
+## 2026-11-01 08:03 UTC — batch ack (fix torch/torchvision + chat hangs + poll live)
+
+Per standing rule: committed before chat. Batch 881844–881849 (07:38–08:02) is fully covered by §08:02 report above.
+
+- **881844 Fix torch NVSHMEM:** vLLM install downgraded torch 2.15→2.13 (broke chat import `libtorch_nvshmem.so: undefined nvshmem_selected_device_transport`); force-reinstalled torch 2.15+cu132, `chipformer.rv.chat` import restored.
+- **881845 Fix torchvision:** vLLM pulled torchvision 0.28/torchaudio 2.11 whose `torchvision::nms` fake-impl broke transformers/Qwen3_5ForCausalLM import; uninstalled both, import restored but chat still hangs after `Loading weights: 581/581` (no op).
+- **881846 Load RvChat q9-rv2:** `RvChat("/workspace/ethereus/dist/q9-rv2")` loads ok on cuda (581 shards, 35 GB, ~40s), but `generate()` with `eth-bridge.elf` never returns — chip exec deadlock.
+- **881847 Start vLLM base:** `vllm serve /workspace/models/Qwen3.5-9B --gpu-memory-utilization 0.45` failed — `Qwen3_5ForConditionalGeneration` not in vLLM 0.32.0 registry (HF server fallback per brief stop rule).
+- **881848–881849 Gate 4 third attempt:** Fast+slow+300s `python -u` all hang after load (stop rule 3 fails hit); filed as BLOCKED in `docs/route-a.md` §2.2 gate 4 and §08:02 report.
+
+Polling `/Users/fraserbrown/Downloads/route-a-brief.md` every 10m until ~10:00 UTC (PID 11438, ~2h from 08:02), base vLLM on hold for dispatcher gate-4 fix, merged eval queued after gates 3–4.
+
+Spend: 58623317 **08:03 UTC = 2.22h ($2.24) @ $1.01/h** since 05:50 UTC; $150/wk cap. Disk 98G/220G, GPU idle (poll only).
+
