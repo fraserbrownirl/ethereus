@@ -1,0 +1,292 @@
+{
+  "system_line": "Files under es/ hold the ethskills reference; before answering, list them and get whatever is relevant.",
+  "questions": [
+    {
+      "id": "why-term",
+      "q": "The Ethereum community prefers which spelling: on-chain or onchain?",
+      "src": "es/why.md",
+      "answer": "onchain, one word, no hyphen",
+      "grade": {
+        "keywords": [
+          [
+            "onchain"
+          ]
+        ]
+      }
+    },
+    {
+      "id": "why-gas",
+      "q": "What are mainnet gas prices in early 2026?",
+      "src": "es/why.md",
+      "answer": "Under 1 gwei (typically 0.1-0.5)",
+      "grade": {
+        "keywords": [
+          [
+            "under 1 gwei",
+            "0.1-0.5",
+            "0.1 - 0.5"
+          ]
+        ]
+      }
+    },
+    {
+      "id": "why-txcost",
+      "q": "How much does a mainnet ETH transfer cost in 2026?",
+      "src": "es/why.md",
+      "answer": "~$0.002-0.01",
+      "grade": {
+        "keywords": [
+          [
+            "0.002",
+            "0.01"
+          ]
+        ]
+      }
+    },
+    {
+      "id": "why-verify",
+      "q": "What command verifies the current base fee?",
+      "src": "es/why.md",
+      "answer": "cast base-fee",
+      "grade": {
+        "exact": [
+          "cast base-fee"
+        ]
+      }
+    },
+    {
+      "id": "why-ethprice",
+      "q": "What was the ETH price in March 2026?",
+      "src": "es/why.md",
+      "answer": "~$2,000 (Mar 2026)",
+      "grade": {
+        "keywords": [
+          [
+            "2,000",
+            "2000"
+          ]
+        ]
+      }
+    },
+    {
+      "id": "why-pricesrc",
+      "q": "Where should you check the current ETH price?",
+      "src": "es/why.md",
+      "answer": "A Chainlink feed or CoinGecko",
+      "grade": {
+        "keywords": [
+          [
+            "chainlink",
+            "coingecko"
+          ]
+        ]
+      }
+    },
+    {
+      "id": "why-pectra-date",
+      "q": "When did the Pectra upgrade ship?",
+      "src": "es/why.md",
+      "answer": "May 7, 2025",
+      "grade": {
+        "keywords": [
+          [
+            "may 7"
+          ]
+        ]
+      }
+    },
+    {
+      "id": "why-pectra-7702",
+      "q": "Which EIP gave us smart EOAs in Pectra?",
+      "src": "es/why.md",
+      "answer": "EIP-7702 smart EOAs",
+      "grade": {
+        "keywords": [
+          [
+            "7702"
+          ]
+        ]
+      }
+    },
+    {
+      "id": "why-pectra-blob",
+      "q": "What blob change came with Pectra?",
+      "src": "es/why.md",
+      "answer": "2x blob capacity",
+      "grade": {
+        "keywords": [
+          [
+            "2x"
+          ],
+          [
+            "blob"
+          ]
+        ]
+      }
+    },
+    {
+      "id": "why-fusaka-date",
+      "q": "When did the Fusaka upgrade ship?",
+      "src": "es/why.md",
+      "answer": "Dec 3, 2025",
+      "grade": {
+        "keywords": [
+          [
+            "dec 3",
+            "december 3"
+          ]
+        ]
+      }
+    },
+    {
+      "id": "why-peerdas",
+      "q": "What is PeerDAS and how much data do nodes sample?",
+      "src": "es/why.md",
+      "answer": "PeerDAS: nodes sample 1/8 of data",
+      "grade": {
+        "keywords": [
+          [
+            "peerdas"
+          ],
+          [
+            "1/8"
+          ]
+        ]
+      }
+    },
+    {
+      "id": "why-gaslimit",
+      "q": "What happened to the gas limit around Fusaka, and was it part of the fork?",
+      "src": "es/why.md",
+      "answer": "30M to 60M; validator signaling, not part of the fork",
+      "grade": {
+        "keywords": [
+          [
+            "30m"
+          ],
+          [
+            "60m"
+          ],
+          [
+            "validator"
+          ]
+        ]
+      }
+    },
+    {
+      "id": "why-8004-what",
+      "q": "What is ERC-8004?",
+      "src": "es/why.md",
+      "answer": "Onchain agent identity registry",
+      "grade": {
+        "keywords": [
+          [
+            "agent identity"
+          ],
+          [
+            "registry"
+          ]
+        ]
+      }
+    },
+    {
+      "id": "why-8004-date",
+      "q": "When was ERC-8004 deployed?",
+      "src": "es/why.md",
+      "answer": "January 29, 2026",
+      "grade": {
+        "keywords": [
+          [
+            "jan 29",
+            "january 29"
+          ]
+        ]
+      }
+    },
+    {
+      "id": "why-8004-idreg",
+      "q": "What is the ERC-8004 IdentityRegistry mainnet address?",
+      "src": "es/why.md",
+      "answer": "0x8004A169FB4a3325136EB29fA0ceB6D2e539a432",
+      "grade": {
+        "exact": [
+          "0x8004a169fb4a3325136eb29fa0ceb6d2e539a432"
+        ]
+      }
+    },
+    {
+      "id": "why-8004-repreg",
+      "q": "What is the ERC-8004 ReputationRegistry mainnet address?",
+      "src": "es/why.md",
+      "answer": "0x8004BAa17C55a88189AE136b182e5fdA19dE9b63",
+      "grade": {
+        "exact": [
+          "0x8004baa17c55a88189ae136b182e5fda19de9b63"
+        ]
+      }
+    },
+    {
+      "id": "why-x402-flow",
+      "q": "How does an x402 payment flow work?",
+      "src": "es/why.md",
+      "answer": "HTTP 402 payment protocol; sign EIP-3009 and retry with payment header",
+      "grade": {
+        "keywords": [
+          [
+            "402"
+          ],
+          [
+            "eip-3009",
+            "3009"
+          ]
+        ]
+      }
+    },
+    {
+      "id": "why-x402-ts",
+      "q": "What is the x402 TypeScript SDK package?",
+      "src": "es/why.md",
+      "answer": "@x402/fetch",
+      "grade": {
+        "exact": [
+          "@x402/fetch"
+        ]
+      }
+    },
+    {
+      "id": "why-glamsterdam",
+      "q": "What is the status of the Glamsterdam upgrade?",
+      "src": "es/why.md",
+      "answer": "Live on Sepolia (2026-10-06); Hoodi fork called off, no mainnet date",
+      "grade": {
+        "keywords": [
+          [
+            "sepolia"
+          ],
+          [
+            "hoodi",
+            "called off"
+          ]
+        ]
+      }
+    },
+    {
+      "id": "why-hegota",
+      "q": "Will the Hegota fork contain Verkle trees?",
+      "src": "es/why.md",
+      "answer": "Hegota will NOT contain Verkle trees; binary state tree EIP-7864 (quantum resistance)",
+      "grade": {
+        "keywords": [
+          [
+            "will not",
+            "won't",
+            "not contain"
+          ],
+          [
+            "verkle"
+          ]
+        ]
+      }
+    }
+  ]
+}
