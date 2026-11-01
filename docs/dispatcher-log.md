@@ -22,3 +22,4 @@ One line per tick: time (UTC), what changed. Spend is omitted because Fraser mon
 - 2026-11-01 10:20 Counted Internet run started: 24 tasks need neither key nor RPC, base then circuit, 2 attempts. 4 no-key tasks deferred for lack of `MAINNET_RPC_URL`; 3 of the 9 judged need it too. Store merge started beside it at low priority.
 - 2026-11-01 10:58 Store checkpoint `q9-store-rv`: gates 1 (1.07x), 2 (18/18), 4 (6/6) pass. Smoke 4/20 with store, 3/20 without. Verify rerun on GPU after an fla CPU error.
 - 2026-11-01 11:08 Store checkpoint all pass, verify 136/136; `serve.py` store support committed, not yet run on GPU. Base arm continuing.
+- 2026-11-01 12:10 Base partial: 12 of 46 scored trials, 6 of 23 tasks. Circuit server had failed to start on a store import (`a428992`); fixed and arm restarted before any circuit trial ran. Mixed `eth` plus client tools confirmed on the GPU. Witness-string task to rerun.
