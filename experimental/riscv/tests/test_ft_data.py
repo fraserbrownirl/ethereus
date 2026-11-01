@@ -87,3 +87,13 @@ def test_dmind_filter_drops_what_the_skills_cover():
     assert g.in_skills("Pick one.", "the gas limit rose", corpus)
     assert not g.in_skills("What is 'Quorum' in a vote?", "A minimum turnout", corpus)
 
+
+def test_question_filter():
+    sys.path.insert(0, str(RV / "scripts"))
+    sys.path.insert(0, str(RV))
+    import gen_ft_data as g
+
+    assert not g.question_ok("Is it true that use a timelock for upgrades?", "use a timelock for upgrades", [])
+    assert not g.question_ok("What does the reference say about oracles?", "Check staleness on every read", [])
+    assert g.question_ok("How should I guard against stale prices?", "Check staleness on every read", [])
+

@@ -80,31 +80,31 @@
   },
   "files": {
    "wanted": 600,
-   "written": 600,
-   "heldout": 60,
+   "written": 361,
+   "heldout": 36,
    "rejected": {
-    "no_fact": 588,
-    "over_max_len": 157,
-    "duplicate": 410
+    "pool_exhausted": 24839
    },
-   "max_tokens": 8171,
+   "max_tokens": 8186,
    "variants": {
-    "plain": 493,
-    "opencode_tools": 104,
-    "opencode_system": 3
+    "plain": 352,
+    "opencode_tools": 9
    },
    "sources": {
-    "es/protocol.md": 62,
-    "es/wallets.md": 81,
-    "es/why.md": 51,
-    "es/tools.md": 24,
-    "es/blocks.md": 44,
-    "es/amaster.md": 62,
-    "es/gas.md": 68,
-    "es/l2s.md": 62,
-    "es/standards.md": 56,
-    "es/index.md": 63,
-    "es/general.md": 27
+    "es/oracles.md": 30,
+    "es/amm.md": 35,
+    "es/lending.md": 57,
+    "es/index.md": 58,
+    "es/vaults.md": 36,
+    "es/general.md": 69,
+    "es/amaster.md": 19,
+    "es/why.md": 10,
+    "es/blocks.md": 3,
+    "es/l2s.md": 18,
+    "es/standards.md": 8,
+    "es/wallets.md": 7,
+    "es/protocol.md": 9,
+    "es/gas.md": 2
    }
   },
   "negative": {
@@ -128,63 +128,84 @@
   },
   "knowledge": {
    "wanted": 500,
-   "written": 445,
-   "heldout": 44,
+   "written": 301,
+   "heldout": 30,
    "rejected": {
-    "over_max_len": 1904,
-    "no_fact": 6674,
-    "duplicate": 11977
+    "pool_exhausted": 20699
    },
-   "max_tokens": 8168,
+   "max_tokens": 8185,
    "variants": {
-    "plain": 399,
-    "opencode_tools": 46
+    "plain": 295,
+    "opencode_tools": 6
    },
    "sources": {
-    "es/tools.md": 3,
-    "es/amaster.md": 50,
-    "es/why.md": 27,
-    "es/blocks.md": 7,
-    "es/gas.md": 25,
-    "es/protocol.md": 20,
-    "es/wallets.md": 38,
-    "es/index.md": 220,
-    "es/general.md": 4,
-    "es/l2s.md": 27,
-    "es/standards.md": 24
+    "es/protocol.md": 3,
+    "es/lending.md": 45,
+    "es/why.md": 5,
+    "es/l2s.md": 18,
+    "es/oracles.md": 18,
+    "es/amm.md": 54,
+    "es/index.md": 45,
+    "es/general.md": 58,
+    "es/vaults.md": 21,
+    "es/amaster.md": 15,
+    "es/wallets.md": 9,
+    "es/gas.md": 4,
+    "es/standards.md": 6
    }
   }
  },
  "sample": [
+  "knowledge-00280",
+  "knowledge-00273",
+  "knowledge-00016",
   "knowledge-00023",
   "knowledge-00263",
-  "knowledge-00307",
-  "knowledge-01555",
-  "knowledge-10969",
+  "knowledge-00205",
+  "knowledge-00269",
   "knowledge-00042",
-  "knowledge-03715",
-  "knowledge-01346",
-  "knowledge-15340",
-  "knowledge-07005",
-  "knowledge-02098",
-  "knowledge-01178",
-  "knowledge-07190",
-  "knowledge-02052",
-  "knowledge-02764",
+  "knowledge-00062",
+  "knowledge-00239",
   "knowledge-00120",
-  "knowledge-00377",
-  "knowledge-03460",
-  "knowledge-00856",
-  "knowledge-07633",
+  "knowledge-00195",
+  "knowledge-00086",
+  "knowledge-00231",
+  "knowledge-00099",
   "knowledge-00039",
-  "knowledge-01393",
-  "knowledge-03869",
-  "knowledge-00615",
-  "knowledge-02591",
-  "knowledge-18817",
-  "knowledge-04405",
-  "knowledge-03294",
-  "knowledge-00483",
-  "knowledge-00400"
- ]
+  "knowledge-00144",
+  "knowledge-00032",
+  "knowledge-00189",
+  "knowledge-00000",
+  "knowledge-00288",
+  "knowledge-00211",
+  "knowledge-00297",
+  "knowledge-00162",
+  "knowledge-00107",
+  "knowledge-00281",
+  "knowledge-00179",
+  "knowledge-00270",
+  "knowledge-00138",
+  "knowledge-00117"
+ ],
+ "knowledge_set": {
+  "examples": 662,
+  "distinct_answers": 468,
+  "max_file_share": 0.192,
+  "per_file": {
+   "es/general.md": 127,
+   "es/index.md": 103,
+   "es/lending.md": 102,
+   "es/amm.md": 89,
+   "es/vaults.md": 57,
+   "es/oracles.md": 48,
+   "es/l2s.md": 36,
+   "es/amaster.md": 34,
+   "es/wallets.md": 16,
+   "es/why.md": 15,
+   "es/standards.md": 14,
+   "es/protocol.md": 12,
+   "es/gas.md": 6,
+   "es/blocks.md": 3
+  }
+ }
 }

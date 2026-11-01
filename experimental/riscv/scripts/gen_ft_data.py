@@ -40,6 +40,8 @@ SYSTEM = json.loads(SMOKE.read_text())["system_line"]
 COUNTS = {"abi": 800, "u256": 400, "create": 200, "run": 400, "files": 600, "negative": 594, "knowledge": 500}
 TOOLS = [ETH_TOOL, *ST.TOOLS]
 OPENCODE = json.loads((RV / "data/ft1/opencode_capture.json").read_text())  # captured from a real eval request
+PHRASINGS = RV / "data/ft1/phrasings.jsonl"  # questions written by a model; answers are extracted file text
+MAX_FILE_SHARE = 0.20  # no file over 20% of the knowledge set
 P_OPENCODE_TOOLS, P_OPENCODE_SYSTEM = 0.30, 0.10  # 30% of examples; 10% of those also get its system prompt
 DMIND_REV = "9954c9c394"  # CC-BY-4.0 per the spec. Never the held-out Security, SmartContract or Infra subsets.
 DMIND = ["Blockchain_Fundamentals", "DAO", "NFT", "Tokenomist"]
@@ -222,23 +224,36 @@ PARAPHRASE = ["{}", "Quick question: {}", "{} Keep it short.", "Please answer br
 
 # --- knowledge: sentences from the store's own response, so an answer always appears in its file -----------
 
-SENT = re.compile(r"^[A-Z`][^|#\n]{30,300}[.:]$")
-
-
 def facts_of(body):
-    """(heading, sentence) from a file's text. Tables, code and short lines are skipped."""
-    heading, out, code = None, [], False
-    for raw in body.splitlines():
+    """(heading, fact) from a file's text: prose, bullets and table rows, skipping code, separators and table
+    headers. A fact is verbatim file text apart from bold markers and a table's outer pipes."""
+    heading, out, code, prev_table = None, [], False, False
+    lines = body.splitlines()
+    for n, raw in enumerate(lines):
         s = raw.strip()
         if s.startswith("```"):
             code = not code
+            prev_table = False
+            continue
         if code or not s:
+            prev_table = False
             continue
         if s.startswith("#"):
             heading = s.lstrip("# ").strip()
+            prev_table = False
             continue
-        s = re.sub(r"^[-*]\s+", "", s).replace("**", "")
-        if heading and SENT.match(s):
+        s = s.replace("**", "")
+        if s.startswith("|"):
+            is_sep = set(s) <= set("|-: ")
+            is_header = not prev_table and n + 1 < len(lines) and set(lines[n + 1].strip()) <= set("|-: ")
+            prev_table = True
+            if is_sep or is_header:
+                continue
+            s = s.strip("|").strip()
+        else:
+            prev_table = False
+            s = re.sub(r"^(?:[-*]|\d+\.)\s+(?:\[[ x]\]\s+)?", "", s)
+        if heading and 25 <= len(s) <= 320 and len(s.split()) >= 5 and not s.endswith(":") and re.search(r"[a-z]{3}", s):
             out.append((heading, s))
     return out
 
@@ -285,6 +300,7 @@ def init():
             s.call("put" if i == 0 else "append", name, piece)
     G["dev"] = s.dev
     G["dmind"] = dmind_rows()
+    G["kpool"] = knowledge_pool()
 
 
 def session():
@@ -308,10 +324,10 @@ def tool_text(ids):
     return (m.group(1) if m else s).strip()
 
 
-def prompt_ids(user, r):
+def prompt_ids(user, r, plain=False):
     """Tools as the eval sees them on some examples: ours plus OpenCode's real tools, some with its system prompt."""
     tools, system, variant = TOOLS, SYSTEM, "plain"
-    if r.random() < P_OPENCODE_TOOLS:
+    if not plain and r.random() < P_OPENCODE_TOOLS:
         tools, variant = TOOLS + OPENCODE["tools"], "opencode_tools"
         if r.random() < P_OPENCODE_SYSTEM:
             system, variant = OPENCODE["system"], "opencode_system"
@@ -324,9 +340,9 @@ def prompt_ids(user, r):
 IM_END = 248046
 
 
-def finish(meta, user, steps, answer, r):
+def finish(meta, user, steps, answer, r, plain=False):
     """steps: [(openai call, call ids, response ids)]. Builds the record with per-token loss flags."""
-    ids, msgs, variant, names = prompt_ids(user, r)
+    ids, msgs, variant, names = prompt_ids(user, r, plain)
     segs = [{"role": "prompt", "train": False, "ids": ids}]
     for call, cids, resp in steps:
         segs.append({"role": "assistant_call", "train": True, "ids": cids})
@@ -359,7 +375,7 @@ def make(job):
             sub, q, a = d[i - hand]
             return finish({**meta, "source": "dmind/" + sub}, q, [], a, r)
         if family in ("files", "knowledge"):
-            return make_knowledge(meta, family, r)
+            return make_knowledge(meta, family, i, r)
         q, cmds, answer = {"abi": abi, "u256": u256, "create": create, "run": run}[family](r)
         ses, steps, outs = session(), [], []
         for cmd in cmds:
@@ -424,49 +440,92 @@ def dmind_rows():
     return rows
 
 
-def make_knowledge(meta, family, r):
-    T = G["T"]
-    f = r.choice(G["man"]["files"])
-    name = enc(f["name"])
+def question_ok(q, answer, smoke):
+    low = q.lower()
+    if answer.lower() in low or SequenceMatcher(None, low, answer.lower()).ratio() > 0.7:
+        return False
+    if re.search(r"\b(the reference|the docs|according to|this file|the file)\b", low):
+        return False
+    return not leaks_smoke(q, smoke)
+
+
+def knowledge_pool():
+    """{family: [entry]} within the targets: every fact used before any fact repeats, and no file over its share.
+    A fact whose heading has no other fact also gets a question built from the heading."""
+    smoke = smoke_tests()
+    facts = [json.loads(ln) for ln in PHRASINGS.read_text().splitlines()]
+    heads = Counter((f["file"], f["heading"]) for f in facts)
+    r, rounds = random.Random(SEED), {}
+    r.shuffle(facts)
+    for f in facts:
+        qs = [q for q in f["questions"] if question_ok(q, f["answer"], smoke)]
+        if heads[(f["file"], f["heading"])] == 1 and question_ok(f"What is the guidance on {f['heading']}?", f["answer"], smoke):
+            qs.append(f"What is the guidance on {f['heading']}?")
+        for n, q in enumerate(qs):
+            rounds.setdefault(n, []).append({"file": f["file"], "heading": f["heading"], "answer": f["answer"], "q": q})
+    total = COUNTS["files"] + COUNTS["knowledge"]
+    cap = int(total * MAX_FILE_SHARE)
+    chosen, used = [], Counter()
+    for n in sorted(rounds):
+        for e in rounds[n]:
+            if len(chosen) < total and used[e["file"]] < cap:
+                chosen.append(e)
+                used[e["file"]] += 1
+    r.shuffle(chosen)
+    k = round(len(chosen) * COUNTS["files"] / total)
+    return {"files": chosen[:k], "knowledge": chosen[k:]}
+
+
+def make_knowledge(meta, family, i, r):
+    pool = G["kpool"][family]
+    if i >= len(pool):
+        return None, "pool_exhausted"
+    e = pool[i]
     ses = session()
     steps = []
     if r.random() < 0.3:
         cids = ST.StoreSession.call_tokens("list")
         steps.append(({"name": "list", "arguments": {}}, cids, do_call(ses, cids)))
-    cids = ST.StoreSession.call_tokens("get", name)
+    cids = ST.StoreSession.call_tokens("get", enc(e["file"]))
     resp = do_call(ses, cids)
-    steps.append(({"name": "get", "arguments": {"name": f["name"]}}, cids, resp))
-    body = tool_text(resp)
-    facts = [x for x in facts_of(body) if not leaks_smoke(x[0] + " " + x[1], G.setdefault("smoke", smoke_tests()))]
-    if not facts:
-        return None, "no_fact"
-    head, sent = r.choice(facts)
-    if sent not in body.replace("**", ""):  # facts_of removes bold markers; the words must still be in the file
+    steps.append(({"name": "get", "arguments": {"name": e["file"]}}, cids, resp))
+    if e["answer"] not in tool_text(resp).replace("**", ""):
         return None, "answer_not_in_file"
-    if family == "files":
-        words = sent.split()
-        at = r.randint(0, max(0, len(words) - 5))
-        phrase = " ".join(words[at:at + 4]).strip(".,:;`")
-        user = r.choice([f"On {head}: what is the guidance on \"{phrase}\"?",
-                         f"What should I know about \"{phrase}\", under {head}?",
-                         f"For {head}, what does the reference say about \"{phrase}\"?"])
-        ans = f"{sent}\n\n(Source: `{f['name']}`)"
-    else:
-        words = sent.split()
-        cut = r.randint(4, max(5, len(words) // 2))
-        user = f"In the ethskills reference, how does this statement continue? \"{' '.join(words[:cut])} ...\""
-        ans = f"{sent}\n\n(Source: `{f['name']}`)"
-    if leaks_smoke(user, G["smoke"]):
-        return None, "smoke_leak"
-    return finish({**meta, "source": f["name"], "answer": sent}, user, steps, ans, r)
+    ans = f"{e['answer']}\n\n(Source: `{e['file']}`)"
+    m = {**meta, "source": e["file"], "answer": e["answer"], "question_source": "model"}
+    row, why = finish(m, e["q"], steps, ans, r)
+    if row is None and why == "over_max_len":  # the fact matters more than the prompt variant
+        row, why = finish(m, e["q"], steps, ans, random.Random(0), plain=True)
+    return row, why
+
+
+def dump_facts(path):
+    """Every usable fact from es/, for writing question phrasings. Answers come only from here."""
+    init()
+    G["smoke"] = smoke_tests()
+    rows, seen = [], set()
+    for f in G["man"]["files"]:
+        ses = session()
+        body = tool_text(do_call(ses, ST.StoreSession.call_tokens("get", enc(f["name"]))))
+        plain = body.replace("**", "")
+        for head, fact in facts_of(body):
+            if fact in seen or fact not in plain or leaks_smoke(head + " " + fact, G["smoke"]):
+                continue
+            seen.add(fact)
+            rows.append({"id": hashlib.sha256(fact.encode()).hexdigest()[:12], "file": f["name"], "heading": head, "answer": fact})
+    Path(path).write_text("".join(json.dumps(r, ensure_ascii=False) + "\n" for r in rows))
+    print(len(rows), Counter(r["file"] for r in rows).most_common())
 
 
 def main():
     ap = argparse.ArgumentParser()
+    ap.add_argument("--dump-facts")
     ap.add_argument("--scale", type=float, default=1.0)
     ap.add_argument("--workers", type=int, default=max(1, mp.cpu_count() - 2))
     ap.add_argument("--out", default=str(RV / "data/ft1"))
     a = ap.parse_args()
+    if a.dump_facts:
+        return dump_facts(a.dump_facts)
     out = Path(a.out)
     out.mkdir(parents=True, exist_ok=True)
     fw_sha = hashlib.sha256(FW.read_bytes()).hexdigest()
@@ -513,12 +572,19 @@ def main():
                 man["sample"] = [x["id"] for x in sample]
                 G["sample"] = sample
             print(fam, man["families"][fam], flush=True)
+    known = [json.loads(ln) for f in ("files", "knowledge") for ln in (out / f"{f}.jsonl").read_text().splitlines()]
+    shares = Counter(x["source"] for x in known)
+    man["knowledge_set"] = {"examples": len(known), "distinct_answers": len({x["answer"] for x in known}),
+                            "max_file_share": round(max(shares.values()) / len(known), 3) if known else None,
+                            "per_file": dict(shares.most_common())}
+    print("knowledge set", man["knowledge_set"], flush=True)
     (out / "manifest.json").write_text(json.dumps(man, indent=1) + "\n")
-    lines = ["# Fine-tune knowledge examples, 30 for review\n", "Generated by `scripts/gen_ft_data.py`. Not reviewed; not yet used for training.\n"]
+    lines = ["# Fine-tune knowledge examples, 30 for review\n",
+             "Generated by `scripts/gen_ft_data.py`. Questions are model-written; answers are extracted from the file and string-verified. Not yet used for training.\n"]
     for x in G.get("sample", []):
         lines += [f"## {x['id']}\n", f"Variant: {x['prompt_variant']}. Source: `{x['source']}`.\n", f"**Question:** {x['messages'][1]['content']}\n",
                   f"**Tool calls:** {', '.join(m['tool_calls'][0]['function']['name'] for m in x['messages'] if m.get('tool_calls'))}\n",
-                  f"**Answer:** {x['messages'][-1]['content']}\n"]
+                  f"**Answer (verbatim from the file):** {x['answer']}\n"]
     if a.scale == 1.0:
         (RV.parents[1] / "docs/ft1-sample.md").write_text("\n".join(lines))
     print("GEN_DONE")

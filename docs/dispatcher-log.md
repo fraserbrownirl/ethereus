@@ -27,3 +27,4 @@ One line per tick: time (UTC), what changed. Spend is omitted because Fraser mon
 - 2026-11-01 14:10 Circuit arm complete: 6 of 24 tasks, 12 of 48 trials, identical to base where both scored; the circuit ran in no trial. Clean `.env` in place. Alchemy confirmed at all pinned blocks. Judged batch running; fork batch queued.
 - 2026-11-01 14:55 Status console added. Ethereus test built; its first run hit no free VRAM because the base server holds 91 GB, so it now runs after the eval batches, still on ELF `b320d31b`. Judge cost so far $2.65.
 - 2026-11-01 16:05 Fine-tune data generated. Counts and rejects in `experimental/riscv/data/ft1/manifest.json`; 30 knowledge examples in `docs/ft1-sample.md` for review.
+- 2026-11-01 16:40 Fine-tune knowledge rebuilt: 468 distinct answers, largest file share 19.2%, 662 examples. New 30-example sample in `docs/ft1-sample.md`.
