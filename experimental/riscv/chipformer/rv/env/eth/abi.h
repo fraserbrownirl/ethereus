@@ -11,7 +11,7 @@ uint32_t abi_selector(const char *sig); // parse "transfer(address,uint256)" -> 
 // encode(sig, args) -> calldata hex string (0x...)
 // args: array of strings, each decimal or 0x hex for uint/address/bool/bytes32 ; for arrays comma-separated? We'll parse per spec.
 
-int abi_encode_calldata(const char *sig, const char **args, int nargs, uint8_t *out, size_t *out_len, char *errbuf, size_t errlen);
+int abi_encode_calldata(const char *sig, const char **args, int nargs, uint8_t *out, size_t out_cap, size_t *out_len, char *errbuf, size_t errlen);
 // decode: types is comma list like "uint256,address" ; hex is 0x...
 int abi_decode(const char *types, const char *hexdata, char *out_lines, size_t out_size, char *errbuf, size_t errlen);
 

@@ -9,6 +9,7 @@
 char host_out[1 << 20];
 size_t host_out_len;
 int host_cmd(const char *cmd);
+int host_raw(const char *hex);
 
 int main(int argc, char **argv) {
     if (argc < 2) { fprintf(stderr, "usage: fuzz cmd|decode ...\n"); return 2; }
@@ -23,6 +24,14 @@ int main(int argc, char **argv) {
         }
         host_out_len = 0;
         host_cmd(line);
+        host_out[host_out_len] = 0;
+        fputs(host_out, stdout);
+        return 0;
+    }
+    if (strcmp(argv[1], "raw") == 0) {
+        if (argc != 3) return 2;
+        host_out_len = 0;
+        host_raw(argv[2]);
         host_out[host_out_len] = 0;
         fputs(host_out, stdout);
         return 0;

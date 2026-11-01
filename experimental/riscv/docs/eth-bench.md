@@ -27,6 +27,9 @@ vectors in `test_rv_eth.py` (non-bridge runs anything in `eth_in`).
   on macOS, so the qemu cross-check runs on Linux or against recorded vectors
   only. Ref-machine-vs-Python (the exactness half) runs anywhere.
 - Sized with the real Qwen3.5 tokenizer (`tokenizers==0.23.3`, dev dep).
+- EVM oracle: py-evm 0.12.1b1 (Cancun), contracts compiled with solc
+  0.8.38 pinned in `env/eth/contracts/solc-version.txt` (py-solc-x
+  2.1.0). All declared in the `dev` dependency group.
 
 ## Gate 1 — keccak + u256 (2026-10-31, PASS)
 
@@ -105,6 +108,71 @@ Selector DROM cache (225 entries, verified 225/225 against 4byte.directory;
 see `env/eth/selectors.verify.log`): demo prompts hit 25/25 at ~1.9k instr;
 a miss costs ~24.8k (one keccak). `encode transfer(address,uint256) …` =
 9,693 instr on a cache hit vs ~27k on a miss.
+
+## Gate 1 — EVM: built-in ERC-20 + AMM (2026-11-01, PASS)
+
+`tests/test_rv_evm.py`: 12 cases through the RV firmware vs py-evm
+`apply_computation` on the same runtime bytecode with the same seeded
+storage — return data, gross gas, revert status, logs, and storage diff
+all equal. Contracts are real solc 0.8.38 `--optimize --metadata-hash
+none` runtime bytecode (`env/eth/contracts/MiniERC20.sol`, `Amm.sol`;
+MIT, <60 lines each), embedded by `gen_builtins.py`, which also emits
+the fixture both sides read (`totalSupply=1000`, `balances[alice]=1000`).
+No deploy: the firmware executes runtime code against the fixture, and
+the oracle does `set_code` + `set_storage` + `apply_computation`.
+
+Gas compared is computation gas, pre-refund (gross), on both sides —
+refunds live at the transaction level, which neither side runs, so v1
+tracks no refunds. Warm/cold (EIP-2929) is required and implemented: a
+transfer's 29,636 gas is mostly cold SLOAD (2,100) + warm SSTORE-reset
+(2,900) + cold SLOAD (2,100) + warm SSTORE-set (20,000).
+
+| call | EVM gas | instr/call | tokens/call | tok/instr | ~wall |
+| --- | --- | --- | --- | --- | --- |
+| totalSupply() | 2,317 | 25,181 | 32,702 | 1.30 | 10 s |
+| balanceOf(alice) | 2,541 | 90,493 | 133,386 | 1.47 | 42 s |
+| transfer(bob,100) | 29,636 | 164,067 | 246,133 | 1.50 | 77 s |
+| approve(spender,50) | 24,486 | 135,962 | 213,942 | 1.57 | 67 s |
+| transferFrom (revert) | 2,827 | 157,521 | 238,757 | 1.52 | 75 s |
+| getAmountOut(1000,50000,60000) | 813 | 127,238 | 155,094 | 1.22 | 48 s |
+
+EVM wall is from tokens at ~3,200 tok/s (batch 1, L4): the model emits
+tokens, so tokens drive demo time. (The older sections use ~3,700
+instr/s; at these rows' ~1.5 tok/instr the two rules differ ~2×.)
+
+Opcode-level exactness (`tests/test_eth_host.py`, host ASan build):
+DIV/SDIV/MOD/SMOD/ADDMOD/MULMOD by zero all return 0 (EVM, not RISC-V);
+SHL/SHR/SAR with shift ≥256 saturate (SAR keeps the sign); SIGNEXTEND
+with x≥31 is identity — each vs py-evm on output and gas, plus
+stack-underflow agreement (ADDMOD at 2-deep faults on both sides).
+
+Profile of `balanceOf` (90k instr): evm_run 46k (51%), keccak perm
+20k (22%, the mapping-slot hash — stays), memset 8k (9%, small fills
+through picolibc), stack_req 7k (7%), handle_run 2k (2%). No fixture
+copy: the fixture stays DROM-pointed (`evm_slot_orig` is noise), and
+calldata parse/response print are ~2% — the cost is interpretation,
+not scaffolding.
+
+`evm_init` no longer bulk-zeroes: stack is sp-guarded, memory is zeroed
+lazily on expansion (as before), storage uses an occupancy count
+instead of a zeroed warm array. Fixed −52k instr/call (transfer
+216k→164k, totalSupply 77k→25k). Short of the 120k target because the
+remaining cost is the interpreter loop itself — the next step there is
+a dispatch rewrite (computed goto / cached stack top), not a Phase 1
+item.
+
+RAM (32 KB total, ~4 KB C stack): `evm_t` is ~11 KB in BSS (stack
+128×u256, 4 KB memory, 32 storage slots; the ERC-20 touches ≤4
+slots/call). Image sizes: `.text 104,948 / .rodata 23,128 / .bss
+13,032`. Revised 2026-11-01 from 256 / 8 KB / 128 slots (~26 KB),
+which did not fit.
+
+Bugs the diff found (all fixed): PUSH aliased `u256_shl` (which zeroes
+its output first) and loaded only the last immediate byte; fresh
+storage slots read 0 instead of the fixture value; SUB was charged 5
+instead of G_verylow 3; the ADDMOD/MULMOD depth row named 0x0C/0x0D
+(the real opcodes are 0x08/0x09) and sat shadowed behind the 0x01–0x0B
+row, admitting a 2-deep stack for a 3-pop op.
 
 ## Probe table (non-bridge, exact counts)
 

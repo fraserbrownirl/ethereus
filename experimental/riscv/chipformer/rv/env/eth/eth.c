@@ -478,104 +478,150 @@ static void handle_create2(const char *arg){
 }
 
 extern const uint8_t builtin_erc20_code[];
-extern const size_t builtin_erc20_len;
+extern const size_t builtin_erc20_code_len;
 extern const uint8_t builtin_amm_code[];
-extern const size_t builtin_amm_len;
+extern const size_t builtin_amm_code_len;
+// Layout-identical to builtin_slot_t (asserted in builtins.c).
+extern const evm_fixture_slot_t builtin_erc20_fixture[];
+extern const size_t builtin_erc20_fixture_len;
+extern const uint8_t builtin_alice[20];
+extern const uint8_t builtin_bob[20];
+extern const uint8_t builtin_spender[20];
 
 static int load_builtin(const char *name, const uint8_t **code, size_t *len){
-    if(strcmp(name,"erc20")==0){ *code=builtin_erc20_code; *len=builtin_erc20_len; return 0; }
-    if(strcmp(name,"amm")==0 || strcmp(name,"uniswap")==0){ *code=builtin_amm_code; *len=builtin_amm_len; return 0; }
+    if(strcmp(name,"erc20")==0){ *code=builtin_erc20_code; *len=builtin_erc20_code_len; return 0; }
+    if(strcmp(name,"amm")==0 || strcmp(name,"uniswap")==0){ *code=builtin_amm_code; *len=builtin_amm_code_len; return 0; }
     return -1;
 }
 
+static void put_u256_hex(const u256_t *v){
+    for(int i=7;i>=0;i--){
+        uint32_t w=v->d[i];
+        put_hex_byte((w>>24)&0xFF); put_hex_byte((w>>16)&0xFF);
+        put_hex_byte((w>>8)&0xFF); put_hex_byte(w&0xFF);
+    }
+}
+
+// run <name> <calldata-hex> [value] [from] [chainid]
+// from: alice (default), bob, or 0x + 40 hex. value: decimal or 0x hex.
+// Success output: 0x<retdata>\n<gas>\n then LOG/SLOT lines.
+// Revert: REVERT 0x<data>\n<gas>\n (logs/storage discarded, like the chain).
 static void handle_run(const char *arg){
-    char tmp[4096]; cpy_cap(tmp, arg, sizeof(tmp));
+    // Tokenize in place: at most 5 tokens, no copies (stack budget).
+    char tmp[2048]; cpy_cap(tmp, arg, sizeof(tmp));
+    const char *tok[5]; int ntok=0;
     char *p=tmp;
+    while(ntok<5){
+        while(isspace((unsigned char)*p)) p++;
+        if(!*p) break;
+        tok[ntok++]=p;
+        while(*p && !isspace((unsigned char)*p)) p++;
+        if(*p) *p++=0;
+    }
     while(isspace((unsigned char)*p)) p++;
-    char *name_end=p;
-    while(*name_end && !isspace((unsigned char)*name_end)) name_end++;
-    if(name_end==p){ put_str("error (bad run)\n"); return; }
-    *name_end=0;
-    char name[64]; cpy_cap(name, p, sizeof(name));
-    p=name_end+1;
-    while(isspace((unsigned char)*p)) p++;
-    char *calldata_str=p;
-    char *cd_end=calldata_str;
-    while(*cd_end && !isspace((unsigned char)*cd_end)) cd_end++;
-    char *rest=cd_end;
-    char calldata_hex[8192];
-    size_t cd_len_str = cd_end - calldata_str;
-    if(cd_len_str>=sizeof(calldata_hex)) cd_len_str=sizeof(calldata_hex)-1;
-    memcpy(calldata_hex, calldata_str, cd_len_str); calldata_hex[cd_len_str]=0;
-    while(*rest && isspace((unsigned char)*rest)) rest++;
-    char value_str[64]="0", chain_str[32]="1";
-    if(*rest){
-        char *tok1=rest;
-        char *tok1_end=tok1;
-        while(*tok1_end && !isspace((unsigned char)*tok1_end)) tok1_end++;
-        *tok1_end=0;
-        char *maybe_chain=tok1_end+1;
-        while(*maybe_chain && isspace((unsigned char)*maybe_chain)) maybe_chain++;
-        if(*maybe_chain){
-            cpy_cap(value_str, tok1, sizeof(value_str));
-            char *tok2=maybe_chain;
-            char *tok2_end=tok2;
-            while(*tok2_end && !isspace((unsigned char)*tok2_end)) tok2_end++;
-            *tok2_end=0;
-            cpy_cap(chain_str, tok2, sizeof(chain_str));
-        } else {
-            cpy_cap(value_str, tok1, sizeof(value_str));
-        }
-    }
-    uint8_t calldata[4096]; size_t calldata_len=0;
-    const char *hx=calldata_hex;
-    while(isspace((unsigned char)*hx)) hx++;
-    if(hx[0]=='0'&&(hx[1]=='x'||hx[1]=='X')) hx+=2;
-    size_t hl=strlen(hx);
-    while(hl>0 && isspace((unsigned char)hx[hl-1])) hl--;
-    if(hl%2!=0){ put_str("error (bad calldata hex)\n"); return; }
-    calldata_len=hl/2;
-    if(calldata_len>sizeof(calldata)){ put_str("error (calldata too big)\n"); return; }
-    for(size_t i=0;i<calldata_len;i++){
-        int hi=hex_nibble(hx[i*2]), lo=hex_nibble(hx[i*2+1]);
-        if(hi<0||lo<0){ put_str("error (bad hex)\n"); return; }
-        calldata[i]=(hi<<4)|lo;
-    }
-    u256_t callvalue; u256_zero(&callvalue);
-    if(value_str[0]){
-        if(strchr(value_str,'x')||strchr(value_str,'X')){
-            if(u256_parse_hex(&callvalue,value_str)!=0){ put_str("error (bad value)\n"); return; }
-        } else {
-            if(u256_parse_dec(&callvalue,value_str)!=0){ put_str("error (bad value)\n"); return; }
-        }
-    }
-    uint64_t chainid=strtoull(chain_str,NULL,0);
+    if(ntok<2 || *p){ put_str("error (bad run)\n"); return; }
+    const char *name=tok[0], *cdstr=tok[1];
+    const char *valuestr=ntok>2?tok[2]:"0";
+    const char *fromstr=ntok>3?tok[3]:"alice";
+    const char *chainstr=ntok>4?tok[4]:"1";
+
     const uint8_t *code=NULL; size_t code_len=0;
+    const evm_fixture_slot_t *fixture=NULL; size_t fixture_len=0;
     if(load_builtin(name, &code, &code_len)!=0){
         put_str("error (unknown contract)\n"); return;
     }
-    evm_t evm;
-    evm_init(&evm, code, code_len, calldata, calldata_len, callvalue, chainid);
+    if(strcmp(name,"erc20")==0){
+        fixture=builtin_erc20_fixture; fixture_len=builtin_erc20_fixture_len;
+    }
+
+    const char *hx=cdstr;
+    if(hx[0]=='0'&&(hx[1]=='x'||hx[1]=='X')) hx+=2;
+    size_t hl=strlen(hx);
+    if(hl%2!=0 || hl/2>EVM_CALLDATA_MAX){ put_str("error (bad calldata)\n"); return; }
+    uint8_t calldata[EVM_CALLDATA_MAX]; size_t calldata_len=hl/2;
+    for(size_t i=0;i<calldata_len;i++){
+        int hi=hex_nibble(hx[i*2]), lo=hex_nibble(hx[i*2+1]);
+        if(hi<0||lo<0){ put_str("error (bad calldata)\n"); return; }
+        calldata[i]=(uint8_t)((hi<<4)|lo);
+    }
+
+    u256_t callvalue; u256_zero(&callvalue);
+    if(strchr(valuestr,'x')||strchr(valuestr,'X')){
+        if(u256_parse_hex(&callvalue,valuestr)!=0){ put_str("error (bad value)\n"); return; }
+    } else {
+        if(u256_parse_dec(&callvalue,valuestr)!=0){ put_str("error (bad value)\n"); return; }
+    }
+
+    u256_t caller; u256_zero(&caller);
+    if(strcmp(fromstr,"alice")==0 || strcmp(fromstr,"bob")==0 || strcmp(fromstr,"spender")==0){
+        const uint8_t *ab=strcmp(fromstr,"bob")==0?builtin_bob:
+            (strcmp(fromstr,"spender")==0?builtin_spender:builtin_alice);
+        for(int i=0;i<5;i++)
+            caller.d[i]=((uint32_t)ab[19-i*4-3]<<24)|((uint32_t)ab[19-i*4-2]<<16)|
+                        ((uint32_t)ab[19-i*4-1]<<8)|ab[19-i*4];
+    } else {
+        const char *ax=fromstr;
+        if(ax[0]=='0'&&(ax[1]=='x'||ax[1]=='X')) ax+=2;
+        if(strlen(ax)!=40){ put_str("error (bad from)\n"); return; }
+        uint8_t ab[20];
+        for(int i=0;i<20;i++){
+            int hi=hex_nibble(ax[i*2]), lo=hex_nibble(ax[i*2+1]);
+            if(hi<0||lo<0){ put_str("error (bad from)\n"); return; }
+            ab[i]=(uint8_t)((hi<<4)|lo);
+        }
+        for(int i=0;i<5;i++)
+            caller.d[i]=((uint32_t)ab[19-i*4-3]<<24)|((uint32_t)ab[19-i*4-2]<<16)|
+                        ((uint32_t)ab[19-i*4-1]<<8)|ab[19-i*4];
+    }
+
+    char *end=NULL;
+    unsigned long long chainid=strtoull(chainstr,&end,0);
+    if(!end || *end){ put_str("error (bad chainid)\n"); return; }
+
+    static evm_t evm; // BSS, not stack (~11 KB)
+    evm_init(&evm, code, code_len, calldata, calldata_len,
+             &callvalue, &caller, (uint64_t)chainid, fixture, fixture_len);
     int rc=evm_run(&evm);
     if(rc==-2){ put_str("error (invalid opcode)\n"); return; }
+    if(rc==-3){ put_str("error (stack)\n"); return; }
     if(rc==-4){ put_str("error (bad jump)\n"); return; }
     if(rc==-5){ put_str("error (mem)\n"); return; }
-    if(rc==-7){ put_str("error (chain-specific precompile)\n"); return; }
+    if(rc==-6){ put_str("error (storage full)\n"); return; }
+    if(rc==-7){ put_str("error (unsupported op)\n"); return; }
+    if(rc==-8){ put_str("error (invalid)\n"); return; }
     if(rc==-10){ put_str("error (out of gas)\n"); return; }
+    if(rc==-11){ put_str("error (log overflow)\n"); return; }
+    if(rc==-12){ put_str("error (chain precompile)\n"); return; }
     if(rc<0){ put_str("error (evm)\n"); return; }
+    const uint8_t *ret=evm.mem+evm.ret_off;
+    char gasbuf[32]; snprintf(gasbuf,sizeof(gasbuf),"%llu", (unsigned long long)evm.gas_used);
     if(evm.reverted){
         put_str("REVERT 0x");
-        for(size_t i=0;i<evm.ret_len;i++) put_hex_byte(evm.ret_buf[i]);
-        put('\n');
-        char gasbuf[32]; snprintf(gasbuf,sizeof(gasbuf),"%llu", (unsigned long long)evm.gas_used);
-        put_str(gasbuf); put('\n');
+        for(size_t i=0;i<evm.ret_len;i++) put_hex_byte(ret[i]);
+        put('\n'); put_str(gasbuf); put('\n');
         return;
     }
     put_str("0x");
-    for(size_t i=0;i<evm.ret_len;i++) put_hex_byte(evm.ret_buf[i]);
-    put('\n');
-    char gasbuf[32]; snprintf(gasbuf,sizeof(gasbuf),"%llu", (unsigned long long)evm.gas_used);
-    put_str(gasbuf); put('\n');
+    for(size_t i=0;i<evm.ret_len;i++) put_hex_byte(ret[i]);
+    put('\n'); put_str(gasbuf); put('\n');
+    for(int i=0;i<evm.nlogs;i++){
+        char nb[16]; snprintf(nb,sizeof(nb),"LOG %d",evm.logs[i].ntopics);
+        put_str(nb);
+        for(int t=0;t<evm.logs[i].ntopics;t++){
+            put(' ');
+            for(int b=0;b<32;b++) put_hex_byte(evm.logs[i].topics[t][b]);
+        }
+        put(' ');
+        for(size_t b=0;b<evm.logs[i].data_len;b++) put_hex_byte(evm.logs[i].data[b]);
+        put('\n');
+    }
+    for(int i=0;i<evm.nslots;i++){
+        u256_t orig; evm_slot_orig(&evm,&evm.storage[i].key,&orig);
+        if(u256_eq(&orig,&evm.storage[i].val)) continue; // not dirty
+        put_str("SLOT ");
+        put_u256_hex(&evm.storage[i].key); put(' ');
+        put_u256_hex(&evm.storage[i].val); put('\n');
+    }
 }
 
 static void handle_cmd(const char *line){
@@ -679,4 +725,30 @@ int main(void){
 #ifdef HOST_FUZZ
 // Test-only entry point for the host ASan harness (never in firmware images).
 int host_cmd(const char *cmd){ handle_cmd(cmd); return 0; }
+// Raw-bytecode entry: run <hex> with empty calldata/caller/fixture, print
+// 0x<retdata>\n<gas>\n (or REVERT/error). For opcode-level unit tests.
+int host_raw(const char *hex){
+    while(*hex==' '||*hex=='\t') hex++;
+    if(hex[0]=='0'&&(hex[1]=='x'||hex[1]=='X')) hex+=2;
+    size_t hl=strlen(hex);
+    static uint8_t code[4096];
+    if(hl%2!=0 || hl/2>sizeof(code)){ put_str("error (bad hex)\n"); return 0; }
+    for(size_t i=0;i<hl/2;i++){
+        int hi=hex_nibble(hex[i*2]), lo=hex_nibble(hex[i*2+1]);
+        if(hi<0||lo<0){ put_str("error (bad hex)\n"); return 0; }
+        code[i]=(uint8_t)((hi<<4)|lo);
+    }
+    static evm_t evm;
+    u256_t zero; u256_zero(&zero);
+    evm_init(&evm, code, hl/2, NULL, 0, &zero, &zero, 1, NULL, 0);
+    int rc=evm_run(&evm);
+    if(rc!=0){ put_str("error (evm)\n"); return 0; }
+    const uint8_t *ret=evm.mem+evm.ret_off;
+    char gasbuf[32]; snprintf(gasbuf,sizeof(gasbuf),"%llu",(unsigned long long)evm.gas_used);
+    if(evm.reverted) put_str("REVERT ");
+    put_str("0x");
+    for(size_t i=0;i<evm.ret_len;i++) put_hex_byte(ret[i]);
+    put('\n'); put_str(gasbuf); put('\n');
+    return 0;
+}
 #endif

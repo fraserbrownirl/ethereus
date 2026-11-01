@@ -32,6 +32,13 @@ MARCH=rv32im_zba
 LIBGCC=$($GCC -march=rv32im -mabi=ilp32 -print-libgcc-file-name 2>/dev/null || echo "")
 B=$(mktemp -d)
 python3 "$HERE/../calc/gen_sled.py" "$B/sled.S"
+# gen_selectors needs eth_hash: invoke with PYTHON set to the project venv
+# (e.g. PYTHON=.venv/bin/python build_eth.sh ...), else any python3 with deps.
+PYBIN=${PYTHON:-python3}
+"$PYBIN" -c "import eth_hash" 2>/dev/null || { echo "FATAL: $PYBIN lacks eth_hash; set PYTHON=.venv/bin/python" >&2; exit 1; }
+"$PYBIN" "$HERE/gen_selectors.py" "$HERE/selectors.txt" "$B/selectors.h"
+"$PYBIN" -c "import solcx" 2>/dev/null || { echo "FATAL: $PYBIN lacks py-solc-x; set PYTHON=.venv/bin/python" >&2; exit 1; }
+"$PYBIN" "$HERE/gen_builtins.py" "$HERE/contracts" "$B" || exit 1
 if [ "$BRIDGE" = 1 ]; then
   LD="$ENV/rom.ld"; DEFS="-DBRIDGE"
 else
@@ -40,9 +47,9 @@ else
   LD="$B/eth.ld"; DEFS=""
 fi
 # shellcheck disable=SC2086
-$GCC -march=$MARCH -mabi=ilp32 -O2 $DEFS -isystem "$PICO/include" -I"$ENV" -I"$HERE" \
+$GCC -march=$MARCH -mabi=ilp32 -O2 $DEFS -isystem "$PICO/include" -I"$ENV" -I"$HERE" -I"$HERE/xkcp" -I"$B" \
   -nostdlib -nostartfiles -static -T"$LD" -o "$OUT/$NAME.elf" \
-  "$ENV/crt0.S" "$HERE/eth.c" "$HERE/u256.c" "$HERE/keccak.c" "$HERE/abi.c" "$HERE/evm.c" "$HERE/builtins.c" "$ENV/sys.c" "$B/sled.S" \
+  "$ENV/crt0.S" "$HERE/eth.c" "$HERE/u256.c" "$HERE/keccak.c" "$HERE/xkcp/KeccakP-1600-inplace32BI.c" "$HERE/abi.c" "$HERE/evm.c" "$HERE/builtins.c" "$ENV/sys.c" "$B/sled.S" \
   -Wl,--start-group "$PICO/lib/libc.a" "$PICO/lib/libsemihost.a" "$PICO/lib/libnosys.a" ${LIBGCC:+"$LIBGCC"} -Wl,--end-group
 NM=${GCC%-gcc}-nm; command -v "$NM" >/dev/null 2>&1 || NM=riscv64-unknown-elf-nm
 if "$NM" "$OUT/$NAME.elf" 2>/dev/null | grep -qi newlib; then
@@ -54,4 +61,5 @@ if [ "$BRIDGE" = 0 ]; then
 fi
 SIZE=${GCC%-gcc}-size; command -v "$SIZE" >/dev/null 2>&1 || SIZE=riscv64-unknown-elf-size
 "$SIZE" -A "$OUT/$NAME.elf" 2>/dev/null | grep -E '^\.(text|rodata|ethin|data|bss)' || echo "size check skipped"
+cp "$B/builtins.gen.json" "$OUT/$NAME.builtins.json"  # oracle's exact-input record
 rm -rf "$B"

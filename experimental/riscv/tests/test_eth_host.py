@@ -14,6 +14,10 @@ from pathlib import Path
 import pytest
 
 ETH = Path(__file__).parent.parent / "chipformer" / "rv" / "env" / "eth"
+
+sys.path.insert(0, str(Path(__file__).parent))
+from evm_oracle import oracle_raw
+
 STUB = Path(__file__).parent / "eth_host_stub"
 MAIN = Path(__file__).parent / "eth_host_main.c"
 
@@ -31,6 +35,11 @@ def fuzzbin(tmp_path_factory):
          str(ETH / "selectors.txt"), str(gen / "selectors.h")],
         capture_output=True, text=True)
     assert r.returncode == 0, r.stderr
+    r = subprocess.run(
+        [sys.executable, str(ETH / "gen_builtins.py"),
+         str(ETH / "contracts"), str(gen)],
+        capture_output=True, text=True)
+    assert r.returncode == 0, r.stderr[-2000:]
     srcs = [MAIN, ETH / "eth.c", ETH / "abi.c", ETH / "u256.c",
             ETH / "keccak.c", ETH / "evm.c", ETH / "builtins.c",
             ETH / "xkcp" / "KeccakP-1600-inplace32BI.c"]
@@ -98,3 +107,65 @@ def test_no_unbounded_string_writes():
             if m:
                 hits.append(f"{p.name}:{i}: {line.strip()}")
     assert not hits, "\n".join(hits)
+
+
+def _push(n: int):
+    if n < 0:
+        n %= 1 << 256
+    ln = max(1, (n.bit_length() + 7) // 8)
+    return bytes([0x5F + ln]) + n.to_bytes(ln, "big")
+
+
+def _prog(*stack_top_first, op):
+    # stack_top_first: values pushed so the first ends on top (pushed last).
+    code = b""
+    for v in reversed(stack_top_first):
+        code += _push(v)
+    code += bytes([op])
+    return (code + bytes.fromhex("60005260206000f3")).hex()
+
+
+DIVZERO = [
+    ("div-zero", _prog(7, 0, op=0x04)),
+    ("div-order", _prog(7, 2, op=0x04)),  # 7//2 pins operand order
+    ("sdiv-zero", _prog((1 << 256) - 1, 0, op=0x05)),
+    ("sdiv-neg", _prog((1 << 256) - 7, 2, op=0x05)),  # -7//2 == -3
+    ("mod-zero", _prog(7, 0, op=0x06)),
+    ("mod-order", _prog(7, 3, op=0x06)),  # 7%3 == 1
+    ("smod-zero", _prog((1 << 256) - 1, 0, op=0x07)),
+    ("smod-neg", _prog((1 << 256) - 7, 3, op=0x07)),  # -7%3 == -1
+    ("addmod-zero", _prog(5, 6, 0, op=0x08)),
+    ("addmod-nz", _prog(5, 6, 7, op=0x08)),  # 11%7 == 4
+    ("mulmod-zero", _prog(5, 6, 0, op=0x09)),
+    ("mulmod-nz", _prog(5, 6, 7, op=0x09)),  # 30%7 == 2
+    ("shl-256", _prog(256, 1, op=0x1B)),
+    ("shr-300", _prog(300, (1 << 256) - 1, op=0x1C)),
+    ("sar-257-neg", _prog(257, (1 << 256) - 1, op=0x1D)),
+    ("sar-257-pos", _prog(257, 1, op=0x1D)),
+    ("signextend-31", _prog(31, 0xFF, op=0x0B)),  # x>=31: identity
+    ("signextend-0", _prog(0, 0xFF, op=0x0B)),
+]
+
+
+@pytest.mark.parametrize("name,code", DIVZERO, ids=[c[0] for c in DIVZERO])
+def test_raw_opcode_matches_pyevm(fuzzbin, name, code):
+    # Division-by-zero is 0 (EVM, not RISC-V); shifts >=256 saturate.
+    o_ret, o_gas, o_err = oracle_raw(bytes.fromhex(code))
+    out = _run(fuzzbin, "raw", code)
+    assert not o_err
+    assert out == f"0x{o_ret}\n{o_gas}\n"
+
+
+UNDERFLOW = [
+    ("addmod-2deep", _prog(5, 6, op=0x08)),  # needs 3, the 0x0C-row bug
+    ("mulmod-2deep", _prog(5, 6, op=0x09)),
+    ("div-1deep", _prog(5, op=0x04)),
+    ("iszero-0deep", "1560005260206000f3"),
+]
+
+
+@pytest.mark.parametrize("name,code", UNDERFLOW, ids=[c[0] for c in UNDERFLOW])
+def test_raw_stack_underflow_matches_pyevm(fuzzbin, name, code):
+    _o_ret, _o_gas, o_err = oracle_raw(bytes.fromhex(code))
+    assert o_err
+    assert _run(fuzzbin, "raw", code) == "error (evm)\n"

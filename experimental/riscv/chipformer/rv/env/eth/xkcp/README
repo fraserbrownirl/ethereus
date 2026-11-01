@@ -1,0 +1,8 @@
+# Vendored XKCP (CC0) — 32-bit bit-interleaved Keccak-p[1600]
+Source: https://github.com/XKCP/XKCP @ 5585d0213203c0c5b2dfdf3b34f5da9275abc3e7 (2026-10-29)
+Files (verbatim, CC0 headers intact):
+- lib/low/KeccakP-1600/plain-32bits-inplace/KeccakP-1600-inplace32BI.c
+- lib/low/KeccakP-1600/plain-32bits-inplace/KeccakP-1600-SnP.h
+- lib/common/brg_endian.h, lib/common/load-store.h, lib/common/SnP-common.h
+- lib/low/common/SnP-Relaned.h
+Used by ../keccak.c (sponge) — no other firmware touches these files.

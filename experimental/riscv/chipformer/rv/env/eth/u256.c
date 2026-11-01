@@ -321,17 +321,22 @@ int u256_parse_hex(u256_t *r, const char *s){
     size_t len=0;
     const char *p=s;
     while(hexval(*p)>=0) { len++; p++; }
+    while(isspace((unsigned char)*p)) p++;
+    if(*p) return -1; // trailing garbage (the u256 tokenizer pre-validates)
     if(len==0){ u256_zero(r); return 0; }
     if(len>64) return -1;
     u256_zero(r);
-    for(size_t i=0;i<len;i++){
-        int v=hexval(s[i]);
-        if(v<0) return -1;
-        u256_t tmp;
-        u256_shl(&tmp, r, 4);
-        *r=tmp;
-        uint64_t c=v;
-        for(int k=0;k<8;k++){ uint64_t s2=(uint64_t)r->d[k]+c; r->d[k]=(uint32_t)s2; c=s2>>32; if(!c) break; }
+    // 8 nibbles per step: accumulate one limb, then one whole-value shift.
+    // (Per-nibble shifts cost ~22k for 64 nibbles; this is ~2k.)
+    size_t pos=0, head=len%8;
+    if(head==0) head=8;
+    for(;;){
+        uint32_t w=0;
+        for(size_t k=0;k<head;k++) w=(w<<4)|(uint32_t)hexval(s[pos++]);
+        u256_t tmp; u256_shl(&tmp, r, (uint32_t)(head*4)); *r=tmp;
+        r->d[0] |= w;
+        if(pos>=len) break;
+        head=8;
     }
     return 0;
 }

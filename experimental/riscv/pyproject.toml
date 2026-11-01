@@ -17,7 +17,12 @@ hf = [
 
 [dependency-groups]
 dev = [
+    "eth-abi>=6.0.0",
+    "eth-hash[pycryptodome]>=0.8.0",
+    "eth-utils>=6.0.0",
     "pillow>=12.3.0",
+    "py-evm>=0.12.1b1",
+    "py-solc-x>=2.1.0",
     "pytest>=8",
     "ruff>=0.6",
     "tokenizers==0.23.3",
