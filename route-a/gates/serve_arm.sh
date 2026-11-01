@@ -5,6 +5,7 @@ W=/workspace; ARM=$1
 pkill -f "chipformer.rv.serve:from_env" 2>/dev/null || true; sleep 3
 umask 077; [ -f $W/serve.token ] || head -c 24 /dev/urandom | od -An -tx1 | tr -d ' \n' > $W/serve.token
 export ETHEREUS_KEYS=$(< $W/serve.token) ETHEREUS_BUFFERED_STREAM=1 ETHEREUS_SYNC_SECONDS=36000 ETHEREUS_RATE_MINUTE=100000 ETHEREUS_RATE_DAY=100000000
+export PYTORCH_ALLOC_CONF=expandable_segments:True
 export ETHEREUS_DATA=$W/serve-data/$ARM CORE_COMMIT=$(git -C $W/ethereus rev-parse --short HEAD)
 export FIRMWARE=$W/ethereus/experimental/riscv/tests/data/rv/eth-bridge.elf
 if [ "$ARM" = base ]; then export ETHEREUS_BASE=1 MODEL=$W/models/Qwen3.5-9B MODEL_ID=q9-base
