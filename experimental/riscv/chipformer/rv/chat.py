@@ -657,6 +657,15 @@ def load_store_file(path) -> dict:
     return snap
 
 
+def firmware_tools(firmware) -> tuple:
+    """The schema the firmware answers: telling Qwen about calc while eth runs gets no tool call."""
+    if Path(firmware).name.startswith("eth"):
+        from chipformer.rv.tools import ETH_TOOL
+
+        return (ETH_TOOL,)
+    return (CALC_TOOL,)
+
+
 def main() -> None:
     ap = argparse.ArgumentParser()
     ap.add_argument("model")
@@ -675,12 +684,12 @@ def main() -> None:
     BR.park(m)
     store = chat.store_cfg is not None
     msgs = [{"role": "user", "content": args.ask}]
-    tools = (CALC_TOOL,)
+    tools = firmware_tools(args.firmware)
     if store:
         from chipformer.rv import store as ST
 
         msgs = [{"role": "system", "content": ST.MEM_SYSTEM}] + msgs
-        tools = (CALC_TOOL, *ST.TOOLS)
+        tools = (*tools, *ST.TOOLS)
     ids = chat.prompt_ids(msgs, tools)
     remembered = bool(args.memory) and Path(args.memory).exists()
     if remembered:
