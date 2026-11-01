@@ -39,14 +39,12 @@ PYBIN=${PYTHON:-python3}
 "$PYBIN" "$HERE/gen_selectors.py" "$HERE/selectors.txt" "$B/selectors.h"
 "$PYBIN" -c "import solcx" 2>/dev/null || { echo "FATAL: $PYBIN lacks py-solc-x; set PYTHON=.venv/bin/python" >&2; exit 1; }
 "$PYBIN" "$HERE/gen_builtins.py" "$HERE/contracts" "$B" || exit 1
-if [ "$BRIDGE" = 1 ]; then
-  LD="$ENV/rom.ld"; DEFS="-DBRIDGE"
-else
-  # eth_in first in RAM (0x100), like .calcin in build_calc.sh; file_buf right
-  # after (0x900), both host-poked inputs outside the token window.
-  sed 's/  .data : {/  .ethin : { *(.ethin) } > RAM\n  .filebuf : { *(.filebuf) } > RAM\n  .data : {/' "$ENV/rom.ld" > "$B/eth.ld"
-  LD="$B/eth.ld"; DEFS=""
-fi
+if [ "$BRIDGE" = 1 ]; then DEFS="-DBRIDGE"; else DEFS=""; fi
+# eth_in first in RAM (0x100), like .calcin in build_calc.sh; file_buf right
+# after (0x900), both host-poked inputs outside the token window. Same layout
+# in both images; the bridge build reads TEXT and leaves eth_in unused.
+sed 's/  .data : {/  .ethin : { *(.ethin) } > RAM\n  .filebuf : { *(.filebuf) } > RAM\n  .data : {/' "$ENV/rom.ld" > "$B/eth.ld"
+LD="$B/eth.ld"
 # shellcheck disable=SC2086
 $GCC -march=$MARCH -mabi=ilp32 -O2 ${EXTRA_CFLAGS:-} $DEFS -isystem "$PICO/include" -I"$ENV" -I"$HERE" -I"$HERE/xkcp" -I"$B" \
   -nostdlib -nostartfiles -static -T"$LD" -o "$OUT/$NAME.elf" \
@@ -57,10 +55,8 @@ if "$NM" "$OUT/$NAME.elf" 2>/dev/null | grep -qi newlib; then
   echo "FATAL: $OUT/$NAME.elf contains newlib symbols" >&2
   exit 1
 fi
-if [ "$BRIDGE" = 0 ]; then
-  "$NM" "$OUT/$NAME.elf" 2>/dev/null | grep -E ' eth_in$' || { echo "FATAL: eth_in missing"; exit 1; }
-  "$NM" "$OUT/$NAME.elf" 2>/dev/null | grep -E ' file_buf$' || { echo "FATAL: file_buf missing"; exit 1; }
-fi
+"$NM" "$OUT/$NAME.elf" 2>/dev/null | grep -E ' eth_in$' || { echo "FATAL: eth_in missing"; exit 1; }
+"$NM" "$OUT/$NAME.elf" 2>/dev/null | grep -E ' file_buf$' || { echo "FATAL: file_buf missing"; exit 1; }
 SIZE=${GCC%-gcc}-size; command -v "$SIZE" >/dev/null 2>&1 || SIZE=riscv64-unknown-elf-size
 "$SIZE" -A "$OUT/$NAME.elf" 2>/dev/null | grep -E '^\.(text|rodata|ethin|filebuf|data|bss)' || echo "size check skipped"
 cp "$B/builtins.gen.json" "$OUT/$NAME.builtins.json"  # oracle's exact-input record

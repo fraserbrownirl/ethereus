@@ -13,9 +13,9 @@
 #define ROWS 80
 enum { TOOL_RESPONSE = 256, TOOL_RESPONSE_END, THINK, THINK_END };
 
-// Non-bridge gate-1 input: the NUL-terminated cmd line in eth_in (RAM 0x100;
-// the host pokes it into the snapshot), exactly like calc_in in calc.c.
-#ifndef BRIDGE
+// Gate-1 input: the NUL-terminated cmd line in eth_in (RAM 0x100; the host
+// pokes it into the snapshot), exactly like calc_in in calc.c. Present in
+// both images so the RAM layout is identical; the bridge build reads TEXT.
 #ifdef HOST_FUZZ
 char eth_in[2048];
 #else
@@ -23,15 +23,13 @@ char eth_in[2048] __attribute__((section(".ethin")));
 #endif
 // Bridge-resolved @file args: the host writes name\0hex\0 pairs, double-NUL
 // terminated, into file_buf (RAM 0x900, 4 KB, outside the 80-token capture).
-// Large arguments never go through the token window on any path; the bridge
-// image has no buffer and answers error (no file). Max ~4K hex chars per
-// command (~2 KB of data, ~16x the window).
+// Large arguments never go through the token window on any path. Max ~4K
+// hex chars per command (~2 KB of data, ~16x the window).
 #define FILE_BUF_SIZE 4096
 #ifdef HOST_FUZZ
 char file_buf[FILE_BUF_SIZE];
 #else
 char file_buf[FILE_BUF_SIZE] __attribute__((section(".filebuf")));
-#endif
 #endif
 
 static void put(int c){ rv_ecall2(1,c,0,0); }
@@ -89,10 +87,6 @@ static int hex_nibble(char c){
 // tok must be NUL-terminated (all call sites pass tmp copies). Bounded scan.
 static const char *file_arg(const char *tok){
     if(!tok || tok[0]!='@' || !tok[1]) return NULL;
-#ifdef BRIDGE
-    (void)tok;
-    return NULL;
-#else
     const char *want=tok+1;
     size_t off=0;
     while(off<FILE_BUF_SIZE && file_buf[off]){
@@ -108,7 +102,6 @@ static const char *file_arg(const char *tok){
         off=ho+hl+1;
     }
     return NULL;
-#endif
 }
 static int parse_hex_fixed(const char *s, uint8_t *out, int out_len){
     while(isspace((unsigned char)*s)) s++;
