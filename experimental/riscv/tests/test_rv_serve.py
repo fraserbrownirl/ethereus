@@ -194,14 +194,23 @@ def test_stream_is_refused_unless_buffered_then_is_valid_sse(tmp_path):
     assert last["choices"][0]["finish_reason"] == "stop" and last["usage"]["total_tokens"] == 2
 
 
-def test_over_window_call_is_left_to_the_firmware_while_spill_is_off():
+def _over_window(movable):
     class T:
         TCO, TCC = 1, 2
 
-    w = serve.Watch(T)
+    w = serve.Watch(T, movable=movable)
     for i in [T.TCO, *[5] * (serve.spill.WINDOW + 5), T.TCC]:
-        w(i)  # no OverWindow: the circuit runs the call and answers error (too long)
-    assert serve.SPILL_ON_GPU is False
+        w(i)
+
+
+def test_over_window_call_the_host_can_move_stops_before_the_circuit_runs():
+    assert serve.SPILL_ON_GPU is True
+    with pytest.raises(serve.OverWindow):
+        _over_window(lambda g: True)
+
+
+def test_over_window_call_the_host_cannot_move_is_left_to_the_firmware():
+    _over_window(lambda g: False)  # the circuit runs it and answers error (too long)
 
 
 def test_trailing_end_tokens_never_reach_the_answer():

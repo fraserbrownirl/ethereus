@@ -352,6 +352,13 @@ int u256_parse_dec(u256_t *r, const char *s){
     if(*s=='-'){ neg=1; s++; }
     else if(*s=='+') s++;
     if(!isdigit((unsigned char)*s)) return -1;
+    {   // Over 2**256-1 is an error, not a silent wrap.
+        static const char MAX[]="115792089237316195423570985008687907853269984665640564039457584007913129639935";
+        const char *q=s; while(*q=='0') q++;
+        size_t l=0; while(isdigit((unsigned char)q[l])) l++;
+        if(l>sizeof(MAX)-1) return -1;
+        if(l==sizeof(MAX)-1 && strncmp(q,MAX,l)>0) return -1;
+    }
     u256_zero(r);
     // 9 digits per step: one single-limb multiply-accumulate, not one u256 mul per digit.
     uint32_t chunk=0; int n=0;

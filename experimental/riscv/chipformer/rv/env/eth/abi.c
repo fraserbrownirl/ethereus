@@ -362,8 +362,8 @@ static int encode_one(const ty_t *ty, const char *arg, uint8_t *slot32, char *er
         while(isspace((unsigned char)*s)) s++;
         if(s[0]=='0'&&(s[1]=='x'||s[1]=='X')) s+=2;
         if(check_hex_body(arg,&len,errbuf,errlen)!=0) return -1;
-        if(len > (size_t)n*2){ set_err(errbuf,errlen,"bad bytes"); return -1; }
-        // left-aligned, zero-padded (matches eth_abi's short-value padding)
+        if(len != (size_t)n*2){ set_err(errbuf,errlen,"bad bytes"); return -1; }
+        // exactly N bytes: a short value is an error, not a guess at its alignment
         for(size_t i=0;i<len/2;i++) slot32[i]=(hex_nib(s[i*2])<<4)|hex_nib(s[i*2+1]);
         return 0;
     }

@@ -44,10 +44,9 @@ _TURN = re.compile(r"<tool_call>(.*?)</tool_call>\s*<tool_response>\n?(.*?)\n?</
                    r"(?:<think>\s*</think>\s*)?", re.DOTALL)
 
 
-# Off: core.snapshot resets the capture state when generation starts, so a re-prefilled call is not
-# captured by the circuit while the lockstep reference does capture it: lock_error right after GO.
-# An over-window call gets the firmware's exact "error (too long)". docs/dispatcher-questions.md.
-SPILL_ON_GPU = False
+# core.snapshot clears the capture when generation restarts, so a spilled command reaches the
+# firmware through eth_in (spill.py). Calls the host cannot move get the firmware's error (too long).
+SPILL_ON_GPU = True
 
 
 class OverWindow(Exception):
@@ -89,8 +88,8 @@ class Watch:
     Called before the token is stepped, so stopping at </tool_call> means the circuit never ran."""
 
     def __init__(self, T: BR.Text, deadline: float | None = None, ours: set[str] | None = None,
-                 decode=None) -> None:
-        self.T, self.deadline, self.ours, self.decode = T, deadline, ours, decode
+                 decode=None, movable=None) -> None:
+        self.T, self.deadline, self.ours, self.decode, self.movable = T, deadline, ours, decode, movable
         self.spill = SPILL_ON_GPU
         self.gen: list[int] = []
         self.start: int | None = None
@@ -106,7 +105,8 @@ class Watch:
                 m = _FN.search(self.decode(self.gen[self.start:-1]))
                 if m is None or m.group(1).strip() not in self.ours:
                     raise ClientCall
-            if self.spill and len(self.gen) - 1 - self.start > spill.WINDOW:
+            if (self.spill and len(self.gen) - 1 - self.start > spill.WINDOW
+                    and self.movable is not None and self.movable(self.gen[self.start:-1])):
                 raise OverWindow
             self.start = None
 
@@ -166,15 +166,22 @@ class Engine:
             messages = [{"role": "system", "content": self.system_line}, *messages]
         ids = chat.prompt_ids(messages, (*mine, *client_tools))
         turn = Turn(prompt_tokens=len(ids))
-        n0, files, must_close, left = len(ids), {}, False, max_new
+        n0, files, eth_in, left = len(ids), {}, None, max_new
+
+        def plan(call: str):
+            cmd = spill.parse_cmd(call)
+            new, moved = spill.rewrite(cmd or "", lambda s: len(self._encode(s)))
+            ok = cmd is not None and moved and len(new.encode()) < spill.ETH_IN_SIZE
+            return (new, moved) if ok else None
+
         while True:
-            fw = spill.firmware_with_files(self.firmware, files)
+            fw = spill.firmware_with_files(self.firmware, files, eth_in)
             # The reference does not know a store loaded from a snapshot (chat.py: --memory)
             lock = None if self.store_tools else BR.Session(T, spill.parked(fw))
             if lock is not None:
                 lock.history(ids)
-            watch = Watch(T, deadline, ours, decode)
-            seg = {"prompt_ids": ids, "files": files}
+            watch = Watch(T, deadline, ours, decode, lambda g: plan(decode(g)) is not None)
+            seg = {"prompt_ids": ids, "files": files, "eth_in": eth_in}
             turn.segments.append(seg)
             try:
                 r = chat.generate(ids, spill.parked(fw), left, max_chip=MAX_CHIP, lock=lock,
@@ -195,18 +202,13 @@ class Engine:
                 head = self._visible(watch.gen[:watch.start])  # through <tool_call>
                 call = T.tok.decode(self._visible(watch.gen[watch.start:-1]),
                                     skip_special_tokens=False)
-                cmd = spill.parse_cmd(call)
-                new, files = spill.rewrite(cmd or "", lambda s: len(self._encode(s)))
-                if cmd is None or not files:  # nothing the host can move: the firmware answers
-                    must_close, files = False, {}
-                    ids = ids + head + self._encode(call)
-                else:
-                    must_close, turn.spilled = True, True
-                    ids = ids + head + self._encode(spill.call_text(new))
+                eth_in, files = plan(call)
+                turn.spilled = True
+                ids = ids + head + self._encode(spill.call_text(eth_in))
                 continue
             seg["gen_ids"] = r["tokens"]
             seg["owner_mask"] = lock.own[len(ids):] if lock is not None else []
-            if must_close and (not r["tokens"] or r["tokens"][0] != T.TCC):
+            if eth_in is not None and (not r["tokens"] or r["tokens"][0] != T.TCC):
                 raise RuntimeError("spill: the model did not close the rewritten call")
             turn.lock_error = r["lock_error"]
             turn.finish_reason = "length" if r["text_tokens"] >= left else "stop"
@@ -221,7 +223,7 @@ class Engine:
 
         return [replay_segment(lambda g, s=s: replay(
                     self.chat, s["prompt_ids"], g,
-                    spill.firmware_with_files(self.firmware, s["files"])),
+                    spill.firmware_with_files(self.firmware, s["files"], s.get("eth_in"))),
                 s, self.chat.T.TCC) for s in trace["segments"]]
 
 

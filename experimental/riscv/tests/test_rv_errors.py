@@ -65,27 +65,51 @@ def test_malformed_result_agrees_with_the_oracle(kind, cmd):
         return
     if kind == "run" or cmd.split()[0] not in ("keccak", "u256", "selector", "encode", "decode", "create", "create2"):
         return
-    assert got == eth.expected(cmd), f"{cmd[:50]!r}: firmware {got[:60]!r}, oracle {eth.expected(cmd)[:60]!r}"
+    assert eth.agrees(got, eth.expected(cmd)), f"{cmd[:50]!r}: firmware {got[:60]!r}, oracle {eth.expected(cmd)[:60]!r}"
 
 
-# Answered, and the oracle agrees, but rule 3 wants an error. The ELF is frozen through the evals, so these
-# change with the spill fix; strict, so the fix has to remove them from this list.
-LENIENT = [
+# Each of these used to answer instead of erroring, and the oracle agreed.
+MUST_ERROR = [
     "keccak",
+    "keccak @nosuchfile",
     "u256 " + "9" * 90,
+    "u256 115792089237316195423570985008687907853269984665640564039457584007913129639936",
     "selector (",
     "selector foo",
     "selector foo(",
+    "selector foo)(",
+    "selector (uint256)",
+    "selector foo(uint256)x",
+    "selector f(" + "a" * 300 + ")",
     "encode foo(bytes32) 0x12",
 ]
 
 
-@pytest.mark.xfail(strict=True, reason="firmware accepts it; fixed with the next firmware change")
-@pytest.mark.parametrize("cmd", LENIENT, ids=[c[:20] for c in LENIENT])
-def test_lenient_input_should_answer_error(cmd):
+@pytest.mark.parametrize("cmd", MUST_ERROR, ids=[c[:20] for c in MUST_ERROR])
+def test_must_answer_error(cmd):
     m = eth.machine(cmd, ELF)
     m.run(3 * 10**6)
-    assert m.out.decode("latin-1").startswith("error")
+    got = m.out.decode("latin-1")
+    assert got.startswith("error"), got[:60]  # by design: asserted, not compared with an oracle
+    assert eth.expected(cmd) == eth.REJECT
+
+
+@pytest.mark.parametrize("cmd", [
+    "keccak 0x", "keccak foo", "u256 115792089237316195423570985008687907853269984665640564039457584007913129639935",
+    "u256 0-1", "selector foo()", "selector permit (address, ((address, uint160), uint256))",
+    "encode foo(bytes32) 0x" + "12" * 32, "encode foo(bytes1) 0x12",
+])
+def test_neighbours_of_those_still_answer(cmd):
+    m = eth.machine(cmd, ELF)
+    m.run(3 * 10**6)
+    got = m.out.decode("latin-1")
+    assert not got.startswith("error"), got[:60]
+    assert got == eth.expected(cmd)
+
+
+def test_answering_a_by_design_input_fails_the_gate():
+    assert eth.agrees("error (bad sig)\n", eth.REJECT)
+    assert not eth.agrees("0x41b1a064\n", eth.REJECT)
 
 
 def test_gate_exits_nonzero_on_a_mismatch(monkeypatch):
