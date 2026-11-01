@@ -1,0 +1,8 @@
+fastapi>=0.115
+uvicorn[standard]>=0.34
+pydantic>=2
+numpy>=1.26
+torch>=2.14.1
+transformers>=4.44
+safetensors>=0.8.0
+tiktoken>=0.7
