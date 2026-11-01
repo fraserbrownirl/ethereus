@@ -169,7 +169,8 @@ def verify_snapshot(T, man, cfg, snap_path, get_name=None):
         n.init = snap.get(name)
     if get_name is None:  # smallest file: cheapest full-body generation
         get_name = min(man["files"], key=lambda f: f["tokens"])["name"]
-    gs = ST.StoreSession(T, fresh_machine(), cfg)
+    # the expected body comes from a reference holding the files, as the snapshot does
+    gs = ST.StoreSession(T, fresh_machine(), cfg, reference_boot(T, man, cfg).dev)
     gs.qwen(T.encode("<|im_start|>assistant\nHi.\n"))
     gs.call("get", T.encode(get_name))
     gown = [i for i, o_ in enumerate(gs.own) if o_]
