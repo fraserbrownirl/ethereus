@@ -1,0 +1,190 @@
+{
+ "spec": "docs/finetune-spec-v1.md",
+ "seed": 20261101,
+ "firmware": "eth-bridge.elf",
+ "firmware_sha256": "b320d31b4fd722ac0adfdbcf1313892967ea1bf8e826bd318138cb167c06c685",
+ "chat_template_sha256": "a4aee8afcf2e0711942cf848899be66016f8d14a889ff9ede07bca099c28f715",
+ "system_line": "Files under es/ hold the ethskills reference; before answering, list them and get whatever is relevant.",
+ "tools": [
+  "eth",
+  "put",
+  "append",
+  "get",
+  "list",
+  "delete"
+ ],
+ "max_len": 8192,
+ "families": {
+  "abi": {
+   "wanted": 800,
+   "written": 800,
+   "heldout": 80,
+   "rejected": {
+    "over_window": 590,
+    "duplicate": 189,
+    "over_max_len": 9
+   },
+   "max_tokens": 8181,
+   "variants": {
+    "opencode_tools": 233,
+    "plain": 556,
+    "opencode_system": 11
+   },
+   "sources": {}
+  },
+  "u256": {
+   "wanted": 400,
+   "written": 400,
+   "heldout": 40,
+   "rejected": {
+    "duplicate": 68
+   },
+   "max_tokens": 8168,
+   "variants": {
+    "plain": 287,
+    "opencode_tools": 105,
+    "opencode_system": 8
+   },
+   "sources": {}
+  },
+  "create": {
+   "wanted": 200,
+   "written": 200,
+   "heldout": 20,
+   "rejected": {
+    "over_window": 116,
+    "over_max_len": 3
+   },
+   "max_tokens": 8192,
+   "variants": {
+    "plain": 144,
+    "opencode_tools": 51,
+    "opencode_system": 5
+   },
+   "sources": {}
+  },
+  "run": {
+   "wanted": 400,
+   "written": 26,
+   "heldout": 2,
+   "rejected": {
+    "over_window": 13721,
+    "duplicate": 3453
+   },
+   "max_tokens": 6189,
+   "variants": {
+    "plain": 17,
+    "opencode_tools": 9
+   },
+   "sources": {}
+  },
+  "files": {
+   "wanted": 600,
+   "written": 600,
+   "heldout": 60,
+   "rejected": {
+    "no_fact": 588,
+    "over_max_len": 157,
+    "duplicate": 410
+   },
+   "max_tokens": 8171,
+   "variants": {
+    "plain": 493,
+    "opencode_tools": 104,
+    "opencode_system": 3
+   },
+   "sources": {
+    "es/protocol.md": 62,
+    "es/wallets.md": 81,
+    "es/why.md": 51,
+    "es/tools.md": 24,
+    "es/blocks.md": 44,
+    "es/amaster.md": 62,
+    "es/gas.md": 68,
+    "es/l2s.md": 62,
+    "es/standards.md": 56,
+    "es/index.md": 63,
+    "es/general.md": 27
+   }
+  },
+  "negative": {
+   "wanted": 594,
+   "written": 516,
+   "heldout": 51,
+   "rejected": {
+    "duplicate": 13,
+    "dmind_exhausted": 24419
+   },
+   "max_tokens": 8044,
+   "variants": {
+    "plain": 363,
+    "opencode_system": 12,
+    "opencode_tools": 141
+   },
+   "sources": {
+    "hand": 100,
+    "dmind": 416
+   }
+  },
+  "knowledge": {
+   "wanted": 500,
+   "written": 445,
+   "heldout": 44,
+   "rejected": {
+    "over_max_len": 1904,
+    "no_fact": 6674,
+    "duplicate": 11977
+   },
+   "max_tokens": 8168,
+   "variants": {
+    "plain": 399,
+    "opencode_tools": 46
+   },
+   "sources": {
+    "es/tools.md": 3,
+    "es/amaster.md": 50,
+    "es/why.md": 27,
+    "es/blocks.md": 7,
+    "es/gas.md": 25,
+    "es/protocol.md": 20,
+    "es/wallets.md": 38,
+    "es/index.md": 220,
+    "es/general.md": 4,
+    "es/l2s.md": 27,
+    "es/standards.md": 24
+   }
+  }
+ },
+ "sample": [
+  "knowledge-00023",
+  "knowledge-00263",
+  "knowledge-00307",
+  "knowledge-01555",
+  "knowledge-10969",
+  "knowledge-00042",
+  "knowledge-03715",
+  "knowledge-01346",
+  "knowledge-15340",
+  "knowledge-07005",
+  "knowledge-02098",
+  "knowledge-01178",
+  "knowledge-07190",
+  "knowledge-02052",
+  "knowledge-02764",
+  "knowledge-00120",
+  "knowledge-00377",
+  "knowledge-03460",
+  "knowledge-00856",
+  "knowledge-07633",
+  "knowledge-00039",
+  "knowledge-01393",
+  "knowledge-03869",
+  "knowledge-00615",
+  "knowledge-02591",
+  "knowledge-18817",
+  "knowledge-04405",
+  "knowledge-03294",
+  "knowledge-00483",
+  "knowledge-00400"
+ ]
+}

@@ -441,7 +441,7 @@ def make_knowledge(meta, family, r):
     if not facts:
         return None, "no_fact"
     head, sent = r.choice(facts)
-    if sent not in body:
+    if sent not in body.replace("**", ""):  # facts_of removes bold markers; the words must still be in the file
         return None, "answer_not_in_file"
     if family == "files":
         words = sent.split()

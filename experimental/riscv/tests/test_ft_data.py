@@ -64,7 +64,7 @@ def test_negatives_call_nothing(data):
 def test_knowledge_answers_appear_in_the_tool_response(data):
     for r in data[0]:
         if r["family"] in ("files", "knowledge"):
-            assert r["answer"] in r["messages"][-2]["content"]
+            assert r["answer"] in r["messages"][-2]["content"].replace("**", "")
 
 
 def test_smoke_questions_are_held_out(data):
