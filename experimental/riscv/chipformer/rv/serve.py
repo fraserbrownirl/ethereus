@@ -142,9 +142,24 @@ class Engine:
         """chat.replay on each segment of a trace, on the machine that segment ran."""
         from chipformer.rv.chat import replay
 
-        return [replay(self.chat, s["prompt_ids"], s["gen_ids"],
-                       spill.firmware_with_files(self.firmware, s["files"]))
-                for s in trace["segments"]]
+        return [replay_segment(lambda g, s=s: replay(
+                    self.chat, s["prompt_ids"], g,
+                    spill.firmware_with_files(self.firmware, s["files"])),
+                s, self.chat.T.TCC) for s in trace["segments"]]
+
+
+def replay_segment(run, seg: dict, tcc: int) -> dict:
+    """``run(gen_ids)`` on a segment. A token cap can end a stream inside a run, which replay sees
+    as the reference wanting tokens at the very end. That is no mismatch: check the stream up to
+    the unfinished run's </tool_call>. Anything else stays a failure."""
+    gen = seg["gen_ids"]
+    r = run(gen)
+    if r["ok"] or r.get("got") or r.get("where") != len(seg["prompt_ids"]) + len(gen):
+        return r
+    if tcc not in gen:
+        return r
+    cut = len(gen) - 1 - gen[::-1].index(tcc)
+    return {**run(gen[:cut]), "truncated_run": True, "checked_tokens": cut}
 
 
 def to_message(text: str) -> tuple[dict, list[dict]]:

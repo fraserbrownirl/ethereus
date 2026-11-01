@@ -53,8 +53,9 @@ def main() -> int:
               and (want is None or any(want in t["content"] for t in tools)))
         bad += not ok
         print("PASS" if ok else "FAIL", want_cmd, json.dumps(
-            {"calls": calls, "tool": [t["content"][:90] for t in tools], "spilled": j["ethereus"]["spilled"],
-             "usage": j["usage"], "replay": replays}, default=str)[:900], flush=True)
+            {"replay": replays, "spilled": j["ethereus"]["spilled"], "usage": j["usage"],
+             "finish": j["choices"][0]["finish_reason"], "calls": calls[:3],
+             "tool": [t["content"][:90] for t in tools[:3]]}, default=str)[:1500], flush=True)
         messages.append({k: v for k, v in msg.items()})
         messages += [{k: v for k, v in t.items()} for t in tools]
         return j

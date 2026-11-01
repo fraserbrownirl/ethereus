@@ -114,3 +114,39 @@ def test_rate_limit(tmp_path, monkeypatch):
     assert c.post("/v1/chat/completions", json=BODY, headers=A).status_code == 200
     r = c.post("/v1/chat/completions", json=BODY, headers=A)
     assert r.status_code == 429 and r.headers["Retry-After"] == "60"
+
+
+TCC = 9
+
+
+def _seg(gen):
+    return {"prompt_ids": [1, 2], "gen_ids": gen, "files": {}}
+
+
+def test_replay_accepts_a_stream_cut_inside_a_run():
+    calls = []
+
+    def run(g):
+        calls.append(g)
+        return {"ok": True} if g == [5, 6] else {"ok": False, "where": 2 + len(g), "got": []}
+
+    r = serve.replay_segment(run, _seg([5, 6, TCC, 7, 8]), TCC)
+    assert r["ok"] and r["truncated_run"] and r["checked_tokens"] == 2 and calls[-1] == [5, 6]
+
+
+def test_replay_still_fails_on_a_wrong_token():
+    wrong = {"ok": False, "where": 3, "got": [1], "want": [2]}
+    assert serve.replay_segment(lambda g: wrong, _seg([5, TCC, 7]), TCC) == wrong
+
+
+def test_replay_still_fails_when_short_before_the_end():
+    early = {"ok": False, "where": 3, "got": [], "want": [2]}
+    assert serve.replay_segment(lambda g: early, _seg([5, TCC, 7]), TCC) == early
+
+
+def test_replay_cut_keeps_a_failure_visible():
+    def run(g):
+        return {"ok": False, "where": 2 + len(g), "got": []} if TCC in g else {"ok": False, "where": 2, "got": [1]}
+
+    r = serve.replay_segment(run, _seg([5, TCC, 7]), TCC)
+    assert not r["ok"] and r["truncated_run"]
