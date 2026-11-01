@@ -21,7 +21,7 @@ Single list for the core repo and Route A; the Cursor agent and Muse are retired
 | 4B evals on a rented L4, up to $0.50/h | queued | After the 9B evals | | | |
 | `docs/ethevals-submission.md` final draft | queued | Needs both backbones' numbers | | | |
 | Fine-tune data generator, `scripts/gen_ft_data.py` | running | | 2026-11-01 | | |
-| Fine-tune training and evaluation, `docs/finetune-spec-v1.md` | queued | After the eval batches and the Ethereus test | | | |
+| Fine-tune training and evaluation, `docs/finetune-spec-v1.md` | queued | Trainer written, no GPU run. After the eval batches, the Ethereus test and Fraser's sample review | | | |
 | Status console, `scripts/status_page.py` | done | | 2026-11-01 | 2026-11-01 | |
 | Clean `.env`, `push_secrets.py` | done | | 2026-11-01 | 2026-11-01 | `eba5d52` |
 | No-key Internet run, circuit arm | done | | 2026-11-01 | 2026-11-01 | 6/24 tasks, 12/48 trials |
