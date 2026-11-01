@@ -27,3 +27,7 @@ Single list for the core repo and Route A, since the Cursor agent and Muse are r
 8. 4B evals on a rented L4, up to $0.50/h, once the 9B evals are running.
 9. After both eval configurations finish: `eth_in` firmware change, its gate 4, the spec's spill test.
 10. `docs/ethevals-submission.md` final draft.
+
+## Blocked
+
+- 7 tasks fork mainnet at pinned blocks and need an archive RPC: `act/treasury-eth-sale`, `act/vault-v2-concentration-rebalance`, `act/vault-v2-market-exit`, `build/aave-savings-page`, `build/keeper-deposits`, `build/signed-votes`, `build/swap-page`. Publicnode refuses archive requests at those blocks, so it is not installed on the VM (saved as `mainnet_rpc.publicnode`). Fraser to supply an Alchemy key.
