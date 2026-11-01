@@ -30,3 +30,4 @@ One line per tick: time (UTC), what changed. Spend is omitted because Fraser mon
 - 2026-11-01 16:40 Fine-tune knowledge rebuilt: 468 distinct answers, largest file share 19.2%, 662 examples. New 30-example sample in `docs/ft1-sample.md`.
 - 2026-11-01 16:22 Gate 4 recheck PASS after `logits_to_keep=1`: 6/6, token counts identical to the pinned run.
 - 2026-11-01 16:22 Base judged batch: 0 of 7 tasks; base total 6 of 30 scored. Judge spend $2.71.
+- 2026-11-01 16:55 Fraser's seven catchers added: three tasks in `docs/dispatcher-tasks.md`, rules in `docs/dispatcher-rules.md`.
