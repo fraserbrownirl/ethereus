@@ -2,6 +2,7 @@
 # Gate 4 and 3 after logits_to_keep=1. Pass: all rows ok, and text and chip counts equal the pinned run.
 W=/workspace; D=$W/ethereus/dist/q9-rv2; R=$D/gate4-keep1; mkdir -p $R
 FW=$W/ethereus/experimental/riscv/tests/data/rv/eth-bridge.elf
+$W/venv/bin/python $W/ethereus/route-a/gates/env_pin.py $R/env-pin.json
 cd $W; PYTHONPATH=ethereus/experimental/riscv:ethereus timeout 7200 $W/venv/bin/python -u $W/ethereus/route-a/gates/gate4.py $D $FW $R > $R/gate4.log 2>&1
 $W/venv/bin/python - "$D/gate4.log" "$R/gate4.log" <<'PY'
 import json, sys
