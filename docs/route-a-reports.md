@@ -130,3 +130,16 @@ Per standing rule: appended before acting, then pushed. `~/Downloads/poll-brief.
 
 Pushed `route-a` as report stream; next `poll-brief.sh` pending after steps 1–3.
 
+## 2026-11-01 09:12 UTC — CURRENT ORDERS 09:12 received; serve.py on route-a; HF server stopped
+
+Per standing rule (re-read before each step). `~/Downloads/route-a-brief.md` changed again at 09:06 UTC (seen 09:13:05); **09:12 replaces 08:58**. 08:58 steps 1–3 are withdrawn.
+
+- **08:58 work landed:** `docs/route-a.md` step 1 committed `dcdcd72` (gates 1–4 PASS table + deadlock correction + 6 prompt table); pushed to `origin/route-a`. Step 2 had started on 08:58's Mac+tunnel plan: HF server `/tmp/hf-server-base.py` on 58623317 port 8000 (PID 20149, 17.7 GB, `Qwen3.5-9B` bf16) + `ssh -N -L 8000:localhost:8000 ethereus-vast` tunnel (PID 24671) — both now stopped per 09:12.
+- **09:12 decisions from Fraser:** Trials run **on the box, NOT the Mac** (no tunnel, no arm64, do not clone/run harness on Mac). Internet mode passes OpenCode tools through with ours on top. Run the **28 no-key tasks in every mode they allow, on both arms**. Do NOT run the 9 tasks whose `task.toml` names `ANTHROPIC_API_KEY` (the 09:12 "28" vs earlier 20 count is because `skills` mode is now included alongside `vanilla`/`internet`).
+- **Waiting on:** dispatcher checking whether Docker can run on 58623317. **Do not install Docker or start any trial until orders say so.**
+- **Do-now (no Docker needed):** Put `serve.py` on `route-a` (replaces shim+HF server for both arms, shared parser): `git checkout 64738d0 -- experimental/riscv/chipformer/rv/serve.py experimental/riscv/chipformer/rv/spill.py experimental/riscv/chipformer/rv/tools.py` (from 64738d0 "serve: turn GPU spill off"). `chat.py` `on_token` hook was already on `route-a` via `b011c7c` (`generate(... on_token=None)` + `if on_token is not None: on_token(nxt)` after `gen.append(nxt)` — matches the authorized spec exactly). No merge of `main` (vocab differs, cannot load `q9-rv2`). Stopped `/tmp/hf-server-base.py` on box (killed 20149) and tunnel on Mac.
+- **What did NOT happen on 09:12 path:** ethevals not yet cloned on box (was on Mac `/tmp/ethevals`, deleted), no trajectories written (both `route-a/trajectories/baseline/` and `.../ethereus/` still only `.gitkeep`), no `vanilla` trial started. `dist/q9-rv2/*.log` and `rv-text.json` remain only on box under `dist/q9-rv2/` (gitignored `/dist/` — not committed to repo by design; logs are in `docs/route-a.md` tables).
+- **Spend:** 58623317 **09:14 UTC ~3.3h (~$3.35) @ $1.01/h** since 05:50 UTC; $150 cap. Waiting on dispatcher Docker check.
+
+Pushed `route-a` as report stream; `~/Downloads/poll-brief.sh` pending (orders say to re-read before next step).
+
