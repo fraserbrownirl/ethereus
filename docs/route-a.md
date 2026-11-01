@@ -93,11 +93,11 @@ On-disk merged growth (dense): 9B 19.31 → 32.9 GB (+13.6 GB; 3.3 GB chip-layer
 
 | | Value |
 |---|---|
-| Status | **In progress — 9B base download running on local host (pid 82841, ~19 GB via hf_xet), then CPU merge** |
-| Reason (prior) | Local host is macOS M-series (51 GB unified RAM, no NVIDIA GPU; `nvidia-smi` not found). Remote hosts `podminer-vps`/`hostinger-vps` have no GPU; `podbank-vast` unreachable. Previous report deferred merge pending a high-RAM GPU host (brief budgets 4× 31 GB ≈ 124 GB for 30 B-class; 9B estimated ~60 GB peak — 51 GB local is tight but may fit since `merge.py` streams one safetensors shard at a time). Merge itself is CPU/RAM-bound (no GPU needed for the widening + chip-layer emit). |
+| Status | **Could not run — no execution environment with required resources** |
+| Reason | Local host is macOS M-series (51 GB unified RAM, no NVIDIA GPU; `nvidia-smi` not found). Merge is CPU/RAM-bound but needs the 9B base weights (19.31 GB) on disk first; local download was stopped per operator (19 GB over unauthenticated connection). Remote hosts `podminer-vps`/`hostinger-vps` have no GPU; `podbank-vast` unreachable. No 80 GB GPU host provisioned for gates/evals. |
 | Circuit (verified) | `circuit {layers: 11, dims: 2918, heads: 103, ffn_units: 42114, max_heads: 16, max_units: 8149}, slots 1265, hidden 5632 (m=22), 11 chip layers` — confirmed on 2026-11-01 via `core.build(Target(16,32,12288))` for `Qwen/Qwen3.5-9B` (same as 4B; circuit is model-size-independent for dense Qwen3.5). |
-| Expected VRAM (merged) | 32.9 GB weights + 0.17 GB state+KV = 33.1 GB @4096; well under 80 GB. Gates still require GPU (textcheck/gpucheck/execcheck/replay/chat) and will be run on a GPU host once merge succeeds. |
-| Next step | Finish `dist/q9-rv1` locally if RAM allows; otherwise rsync base to a ≥64 GB GPU host and run merge there. Record `time -v` and `psutil` high-water mark. |
+| Expected VRAM (merged) | 32.9 GB weights + 0.17 GB state+KV = 33.1 GB @4096; well under 80 GB. Gates require GPU (textcheck/gpucheck/execcheck/replay/chat) and must be run on a provisioned host. |
+| Next step | Provision a GPU host (≥64 GB RAM, 80 GB VRAM) with authenticated HF access. On that host: `snapshot_download("Qwen/Qwen3.5-9B")` (19 GB), `python -m chipformer.rv.merge <base> --out dist/q9-rv1`, then gates §2.2. Record peak RAM (`/usr/bin/time -v` or `psutil`) and wall time. |
 
 ### 2.2 Gates
 
@@ -170,13 +170,13 @@ Do **not** push to HF yet. Keep on-box, record per-shard SHA-256 in this report,
 
 ## 6. Per-step GPU + wall time
 
-All steps except Task 1 and shim fixes are **could not run** at 2026-11-01T13:40+04 (week clock, Task 1 complete). 9B base download in progress (see §2.1). Hardware for remaining steps: one 80 GB GPU (A100/H100) + ≥64 GB host RAM + ~70 GB disk for 9B merged.
+All steps beyond Task 1 and shim are **could not run** at 2026-11-01T14:05+04 (week clock, Task 1 complete). 9B merge requires authenticated HF download on a GPU host with ≥64 GB RAM (see §2.1). No download will be started from this Mac.
 
 | Step | GPU | Wall time | Peak RAM/VRAM |
 |---|---|---|---|
 | Backbone enumeration | MacBook (no GPU) | 1.5 h | 51 GB RAM |
 | Shim fix (3 bugs → ETH_TOOL + RvChat wiring) | MacBook | 0.5 h | — |
-| Merge 9B | Local M-series (attempting; 51 GB) → H100 if OOM | Est. 2–6 h (4B: ~45 min/31 GB) | Est. 40–60 GB RAM (streams shards), 33 GB VRAM |
+| Merge 9B | H100 80 GB host (to be provisioned) | Est. 2–6 h (4B: ~45 min/31 GB) | Est. 40–60 GB RAM (streams shards), 33 GB VRAM |
 | textcheck (16 prompts) | H100 80 GB (provisioned) | Est. 0.5 h | VRAM < 40 GB |
 | gpucheck --decode | same | Est. 1 h | VRAM < 40 GB |
 | execcheck + replay (6 records) | same | Est. 0.5 h | VRAM < 40 GB |
@@ -188,7 +188,7 @@ All steps except Task 1 and shim fixes are **could not run** at 2026-11-01T13:40
 
 ### Failures / findings
 
-- No failures on Task 1; table + VRAM budget are complete and reproducible via `experimental/riscv/.venv/bin/python` + unauthenticated HF Hub. Circuit for 9B verified (`dims 2918`, `heads 103`, `slots 1265`, `hidden 5632`).
+- No failures on Task 1; table + VRAM budget are complete and reproducible via `experimental/riscv/.venv/bin/python` + unauthenticated HF Hub. Circuit for 9B verified (`dims 2918`, `heads 103`, `slots 1265`, `hidden 5632`). Attempted local 9B download stopped per operator — no 19 GB pull over unauthenticated connection; merge must run on a provisioned host.
 - **Shim bugs fixed (2026-11-01):** `RvChat(firmware=…)` does not exist (firmware is per-request `ref.Machine`), `generate()` requires `machine` positional, and prompt construction must use `prompt_ids(msgs, tools=[ETH_TOOL])` not raw concatenation. Fixed in `route-a/shim/server.py`.
 - MoE merge unsupported: `chipformer/rv/merge.py:build_merged` reads `text_config.intermediate_size` (MoE has `None`); no expert sharding exists. Filing as **F1: MoE merge path missing** — needed only if a future pick were MoE.
 - No 80 GB runner configured for gates/evals. Filing as **Ops: provision runner with HF_TOKEN + Vast/Lambda credentials**. Gates `2–4` require CUDA (textcheck, gpucheck --decode, execcheck, chat).
