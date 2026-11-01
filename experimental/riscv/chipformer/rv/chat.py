@@ -488,6 +488,15 @@ def replay(chat: RvChat, prompt: list[int], gen: list[int], firmware) -> dict:
             "owner_mismatch": bad_own, "runs": len(ses.runs)}
 
 
+def firmware_tools(firmware) -> tuple:
+    """The schema the firmware answers: telling Qwen about calc while eth runs gets no tool call."""
+    if Path(firmware).name.startswith("eth"):
+        from chipformer.rv.tools import ETH_TOOL
+
+        return (ETH_TOOL,)
+    return (CALC_TOOL,)
+
+
 def main() -> None:
     ap = argparse.ArgumentParser()
     ap.add_argument("model")
@@ -496,11 +505,12 @@ def main() -> None:
     ap.add_argument("--max-new", type=int, default=600)
     ap.add_argument("--check", action="store_true")
     ap.add_argument("--slow", action="store_true", help="every layer through the HF modules")
+    ap.add_argument("--executor", action="store_true", help="the chip layers on the executor")
     args = ap.parse_args()
-    chat = RvChat(args.model, fast=not args.slow)
+    chat = RvChat(args.model, fast=not args.slow, executor=args.executor)
     m = ref.Machine.from_program(elf.program(args.firmware))
     BR.park(m)
-    ids = chat.prompt_ids([{"role": "user", "content": args.ask}])
+    ids = chat.prompt_ids([{"role": "user", "content": args.ask}], firmware_tools(args.firmware))
     m2 = ref.Machine.from_program(elf.program(args.firmware))
     BR.park(m2)
     lock = BR.Session(chat.T, m2)
