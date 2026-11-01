@@ -1526,6 +1526,28 @@ def cases(n: int, seed: int = 0, only: list[str] | None = None, stats: dict | No
                 yield per_op[op][i]
 
 
+def boundary_cases():
+    """Every intN and uintN at min, max, max+1, min-1; every bytesN at N and N+1 bytes.
+
+    Out of range must be an error, asserted and not compared. In range is compared with eth_abi
+    directly, not with expected(). Never sized against the window: spill reaches past it."""
+    from eth_abi import encode as abi_encode
+
+    def ok(tp, v):
+        return "0x" + _keccak_hex(f"f({tp})".encode())[:8] + abi_encode([tp], [v]).hex() + "\n"
+
+    for bits in range(8, 257, 8):
+        for tp, lo, hi in ((f"uint{bits}", 0, 2**bits - 1), (f"int{bits}", -(2 ** (bits - 1)), 2 ** (bits - 1) - 1)):
+            yield f"encode f({tp}) {lo}", ok(tp, lo)
+            yield f"encode f({tp}) {hi}", ok(tp, hi)
+            yield f"encode f({tp}) {hi + 1}", REJECT
+            yield f"encode f({tp}) {lo - 1}", REJECT
+    for n in range(1, 33):
+        tp = f"bytes{n}"
+        yield f"encode f({tp}) 0x{'ab' * n}", ok(tp, b"\xab" * n)
+        yield f"encode f({tp}) 0x{'ab' * (n + 1)}", REJECT
+
+
 # ---------------------------------------------------------------------------
 # Runner
 
@@ -1594,6 +1616,20 @@ def main():
             print(f"MISMATCH {op} {cmd!r} got={val!r} want={oracle!r}")
             if bad <= 3:
                 print(" raw:", repr(raw.decode()[:2000]))
+
+    if "encode" in (only or OPS):
+        nb = bb = 0
+        for cmd, want in boundary_cases():
+            nb += 1
+            total_expected += 1
+            val, _, _ = run_one(cmd)
+            if not agrees(val, want):
+                bad += 1
+                bb += 1
+                if len(bad_samples) < 10:
+                    bad_samples.append((cmd, repr(val), repr(want)))
+                print(f"MISMATCH boundary {cmd!r} got={val!r} want={want!r}")
+        print(f"boundary slice: {nb} cases, {bb} mismatches")
 
     elapsed = time.time() - t0
     print(f"{total_expected} cases ({', '.join(f'{op} {per[op][0]}' for op in per)}), {bad} mismatches ({elapsed:.1f} s), {rejected} rejected by design, asserted as errors")

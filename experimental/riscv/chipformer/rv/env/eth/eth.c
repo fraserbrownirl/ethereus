@@ -333,7 +333,7 @@ static void handle_u256(const char *arg){
             if(numbuf[0]=='0'&&(numbuf[1]=='x'||numbuf[1]=='X')){
                 if(u256_parse_hex(&v,numbuf)!=0){ put_str("error (bad hex)\n"); return; }
             } else {
-                if(u256_parse_dec(&v,numbuf)!=0){ put_str("error (bad dec)\n"); return; }
+                if(!u256_dec_fits(numbuf) || u256_parse_dec(&v,numbuf)!=0){ put_str("error (bad dec)\n"); return; }
             }
             toks[ntok].kind=0; toks[ntok].num=v; ntok++;
             expect_operand=0;
@@ -609,7 +609,7 @@ static void handle_run(const char *arg){
     if(strchr(valuestr,'x')||strchr(valuestr,'X')){
         if(u256_parse_hex(&callvalue,valuestr)!=0){ put_str("error (bad value)\n"); return; }
     } else {
-        if(u256_parse_dec(&callvalue,valuestr)!=0){ put_str("error (bad value)\n"); return; }
+        if(!u256_dec_fits(valuestr) || u256_parse_dec(&callvalue,valuestr)!=0){ put_str("error (bad value)\n"); return; }
     }
 
     u256_t caller; u256_zero(&caller);

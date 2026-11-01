@@ -107,6 +107,37 @@ def test_neighbours_of_those_still_answer(cmd):
     assert got == eth.expected(cmd)
 
 
+# Found by the over-window gate: a positive decimal was read as two's complement.
+@pytest.mark.parametrize("cmd", [
+    f"encode f(int256) {2**255}", f"encode f(int8) {2**256 - 1}", f"encode f(int256) {2**255 - 1}", f"encode f(int256) {-2**255}",
+    "encode f(int256) 0x" + "8" + "0" * 63, "encode f(int256) 0x" + "f" * 64,
+    f"encode f(uint256) {2**256}", f"encode f(int256) {2**256}",
+])
+def test_integer_boundaries_agree_with_the_oracle(cmd):
+    m = eth.machine(cmd, ELF)
+    m.run(3 * 10**6)
+    assert m.out.decode("latin-1") == eth.expected(cmd)
+
+
+def test_boundary_slice_covers_every_width():
+    cases = list(eth.boundary_cases())
+    assert len(cases) == 32 * 2 * 4 + 32 * 2
+    assert sum(w == eth.REJECT for _, w in cases) == 32 * 2 * 2 + 32
+    for w in (8, 128, 256):
+        for t in ("int", "uint"):
+            assert sum(c.startswith(f"encode f({t}{w}) ") for c, _ in cases) == 4
+
+
+def test_boundary_slice_on_the_firmware():
+    bad = []
+    for cmd, want in eth.boundary_cases():
+        m = eth.machine(cmd, ELF)
+        m.run(3 * 10**6)
+        if not eth.agrees(m.out.decode("latin-1"), want):
+            bad.append((cmd[:40], m.out.decode("latin-1")[:40]))
+    assert not bad, bad
+
+
 def test_answering_a_by_design_input_fails_the_gate():
     assert eth.agrees("error (bad sig)\n", eth.REJECT)
     assert not eth.agrees("0x41b1a064\n", eth.REJECT)
