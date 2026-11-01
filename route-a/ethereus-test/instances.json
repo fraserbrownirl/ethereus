@@ -1,0 +1,100 @@
+{
+ "label": "Ethereus test, not ETH Evals",
+ "items": [
+  {
+   "id": "calldata-0",
+   "kind": "calldata",
+   "expected": "0xa9059cbb000000000000000000000000222222222222222222222222222222222222222200000000000000000000000000000000000000000000000000000000000002f3",
+   "prompt": "What is the exact ABI-encoded calldata for calling transfer(address,uint256) with arguments 0x2222222222222222222222222222222222222222, 755? Give the answer as 0x-prefixed lowercase hex on the last line of your reply, with nothing else on that line."
+  },
+  {
+   "id": "calldata-1",
+   "kind": "calldata",
+   "expected": "0x095ea7b30000000000000000000000003333333333333333333333333333333333333333000000000000000000000000000000000000000000000000000000000000005e",
+   "prompt": "What is the exact ABI-encoded calldata for calling approve(address,uint256) with arguments 0x3333333333333333333333333333333333333333, 94? Give the answer as 0x-prefixed lowercase hex on the last line of your reply, with nothing else on that line."
+  },
+  {
+   "id": "calldata-2",
+   "kind": "calldata",
+   "expected": "0x23b872dd000000000000000000000000111111111111111111111111111111111111111100000000000000000000000022222222222222222222222222222222222222220000000000000000000000000000000000000000000000000000000000000077",
+   "prompt": "What is the exact ABI-encoded calldata for calling transferFrom(address,address,uint256) with arguments 0x1111111111111111111111111111111111111111, 0x2222222222222222222222222222222222222222, 119? Give the answer as 0x-prefixed lowercase hex on the last line of your reply, with nothing else on that line."
+  },
+  {
+   "id": "calldata-3",
+   "kind": "calldata",
+   "expected": "0xa9059cbb000000000000000000000000111111111111111111111111111111111111111100000000000000000000000000000000000000000000000000000000000003da",
+   "prompt": "What is the exact ABI-encoded calldata for calling transfer(address,uint256) with arguments 0x1111111111111111111111111111111111111111, 986? Give the answer as 0x-prefixed lowercase hex on the last line of your reply, with nothing else on that line."
+  },
+  {
+   "id": "calldata-4",
+   "kind": "calldata",
+   "expected": "0x095ea7b300000000000000000000000022222222222222222222222222222222222222220000000000000000000000000000000000000000000000000000000000000194",
+   "prompt": "What is the exact ABI-encoded calldata for calling approve(address,uint256) with arguments 0x2222222222222222222222222222222222222222, 404? Give the answer as 0x-prefixed lowercase hex on the last line of your reply, with nothing else on that line."
+  },
+  {
+   "id": "slot-0",
+   "kind": "slot",
+   "expected": "0x6736a344e68a2110ff5bfdc340f9d85b9f7e3968763f7b9c75f8ec77e6c11a5d",
+   "prompt": "A Solidity contract has a mapping(address => uint256) at storage slot 3. What is the storage slot of the entry for key 0x67a44a0fb2daf5b1966a1c0b06b4e80ca38ab8a6? It is the keccak256 of the 64-byte key and slot: 0x00000000000000000000000067a44a0fb2daf5b1966a1c0b06b4e80ca38ab8a60000000000000000000000000000000000000000000000000000000000000003. Give the answer as 0x-prefixed lowercase hex on the last line of your reply, with nothing else on that line."
+  },
+  {
+   "id": "slot-1",
+   "kind": "slot",
+   "expected": "0x4f898aef860004c3c2ad715f94653dad6e42aeb6c4d02338046aca54ee2e2688",
+   "prompt": "A Solidity contract has a mapping(address => uint256) at storage slot 8. What is the storage slot of the entry for key 0xccd45146ce4a5054d622122062a25e2491514872? It is the keccak256 of the 64-byte key and slot: 0x000000000000000000000000ccd45146ce4a5054d622122062a25e24915148720000000000000000000000000000000000000000000000000000000000000008. Give the answer as 0x-prefixed lowercase hex on the last line of your reply, with nothing else on that line."
+  },
+  {
+   "id": "slot-2",
+   "kind": "slot",
+   "expected": "0x7f7900fd2a96943424856cc5c26ea2494b1c5324d0da086eabd1e8e90e1aab7a",
+   "prompt": "A Solidity contract has a mapping(address => uint256) at storage slot 2. What is the storage slot of the entry for key 0xe04832d5797034d7e6e258d60659117d88444a17? It is the keccak256 of the 64-byte key and slot: 0x000000000000000000000000e04832d5797034d7e6e258d60659117d88444a170000000000000000000000000000000000000000000000000000000000000002. Give the answer as 0x-prefixed lowercase hex on the last line of your reply, with nothing else on that line."
+  },
+  {
+   "id": "slot-3",
+   "kind": "slot",
+   "expected": "0x2fb0a2a20d9511cc5fce921f95747e73c17b93ce95ba0726a6a5bf68fd9ca94a",
+   "prompt": "A Solidity contract has a mapping(address => uint256) at storage slot 7. What is the storage slot of the entry for key 0xe9b3e5e87bc8c79f4a605800d130835ac097bf06? It is the keccak256 of the 64-byte key and slot: 0x000000000000000000000000e9b3e5e87bc8c79f4a605800d130835ac097bf060000000000000000000000000000000000000000000000000000000000000007. Give the answer as 0x-prefixed lowercase hex on the last line of your reply, with nothing else on that line."
+  },
+  {
+   "id": "slot-4",
+   "kind": "slot",
+   "expected": "0x608a75132b38eac63db66353d03940945c9c556f127eb2576fd6c3639db3a96d",
+   "prompt": "A Solidity contract has a mapping(address => uint256) at storage slot 2. What is the storage slot of the entry for key 0xf7fe52633457711a9c38f87e513abf01e9d13ced? It is the keccak256 of the 64-byte key and slot: 0x000000000000000000000000f7fe52633457711a9c38f87e513abf01e9d13ced0000000000000000000000000000000000000000000000000000000000000002. Give the answer as 0x-prefixed lowercase hex on the last line of your reply, with nothing else on that line."
+  },
+  {
+   "id": "erc20-0",
+   "kind": "erc20",
+   "expected": "0x00000000000000000000000000000000000000000000000000000000000003e8",
+   "calldata": "0x70a082310000000000000000000000001111111111111111111111111111111111111111",
+   "prompt": "The tool's built-in contract named erc20 has its fixed state: alice is 0x1111111111111111111111111111111111111111, bob is 0x2222222222222222222222222222222222222222, spender is 0x3333333333333333333333333333333333333333. What 32-byte return data does balanceOf(address)(0x1111111111111111111111111111111111111111) return when called on it? Give the answer as 0x-prefixed lowercase hex on the last line of your reply, with nothing else on that line."
+  },
+  {
+   "id": "erc20-1",
+   "kind": "erc20",
+   "expected": "0x0000000000000000000000000000000000000000000000000000000000000000",
+   "calldata": "0x70a082310000000000000000000000002222222222222222222222222222222222222222",
+   "prompt": "The tool's built-in contract named erc20 has its fixed state: alice is 0x1111111111111111111111111111111111111111, bob is 0x2222222222222222222222222222222222222222, spender is 0x3333333333333333333333333333333333333333. What 32-byte return data does balanceOf(address)(0x2222222222222222222222222222222222222222) return when called on it? Give the answer as 0x-prefixed lowercase hex on the last line of your reply, with nothing else on that line."
+  },
+  {
+   "id": "erc20-2",
+   "kind": "erc20",
+   "expected": "0x00000000000000000000000000000000000000000000000000000000000003e8",
+   "calldata": "0x18160ddd",
+   "prompt": "The tool's built-in contract named erc20 has its fixed state: alice is 0x1111111111111111111111111111111111111111, bob is 0x2222222222222222222222222222222222222222, spender is 0x3333333333333333333333333333333333333333. What 32-byte return data does totalSupply() return when called on it? Give the answer as 0x-prefixed lowercase hex on the last line of your reply, with nothing else on that line."
+  },
+  {
+   "id": "erc20-3",
+   "kind": "erc20",
+   "expected": "0x0000000000000000000000000000000000000000000000000000000000000012",
+   "calldata": "0x313ce567",
+   "prompt": "The tool's built-in contract named erc20 has its fixed state: alice is 0x1111111111111111111111111111111111111111, bob is 0x2222222222222222222222222222222222222222, spender is 0x3333333333333333333333333333333333333333. What 32-byte return data does decimals() return when called on it? Give the answer as 0x-prefixed lowercase hex on the last line of your reply, with nothing else on that line."
+  },
+  {
+   "id": "erc20-4",
+   "kind": "erc20",
+   "expected": "0x0000000000000000000000000000000000000000000000000000000000000000",
+   "calldata": "0xdd62ed3e00000000000000000000000011111111111111111111111111111111111111110000000000000000000000003333333333333333333333333333333333333333",
+   "prompt": "The tool's built-in contract named erc20 has its fixed state: alice is 0x1111111111111111111111111111111111111111, bob is 0x2222222222222222222222222222222222222222, spender is 0x3333333333333333333333333333333333333333. What 32-byte return data does allowance(address,address)(0x1111111111111111111111111111111111111111, 0x3333333333333333333333333333333333333333) return when called on it? Give the answer as 0x-prefixed lowercase hex on the last line of your reply, with nothing else on that line."
+  }
+ ]
+}
