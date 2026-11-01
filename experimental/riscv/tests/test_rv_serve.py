@@ -192,3 +192,14 @@ def test_stream_is_refused_unless_buffered_then_is_valid_sse(tmp_path):
     first, last = json.loads(frames[0]), json.loads(frames[-2])
     assert first["choices"][0]["delta"]["content"] == "The selector is 0xa9059cbb."
     assert last["choices"][0]["finish_reason"] == "stop" and last["usage"]["total_tokens"] == 2
+
+
+def test_over_window_call_is_left_to_the_firmware_while_spill_is_off():
+    class T:
+        TCO, TCC = 1, 2
+
+    w = serve.Watch(T)
+    for i in [T.TCO, *[5] * (serve.spill.WINDOW + 5), T.TCC]:
+        w(i)  # no OverWindow: the circuit runs the call and answers error (too long)
+    assert serve.SPILL_ON_GPU is False
+

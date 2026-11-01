@@ -43,6 +43,12 @@ _TURN = re.compile(r"<tool_call>(.*?)</tool_call>\s*<tool_response>\n?(.*?)\n?</
                    r"(?:<think>\s*</think>\s*)?", re.DOTALL)
 
 
+# Off: core.snapshot resets the capture state when generation starts, so a re-prefilled call is not
+# captured by the circuit while the lockstep reference does capture it: lock_error right after GO.
+# An over-window call gets the firmware's exact "error (too long)". docs/dispatcher-questions.md.
+SPILL_ON_GPU = False
+
+
 class OverWindow(Exception):
     """The model closed a tool call longer than the capture window."""
 
@@ -84,6 +90,7 @@ class Watch:
     def __init__(self, T: BR.Text, deadline: float | None = None, ours: set[str] | None = None,
                  decode=None) -> None:
         self.T, self.deadline, self.ours, self.decode = T, deadline, ours, decode
+        self.spill = SPILL_ON_GPU
         self.gen: list[int] = []
         self.start: int | None = None
 
@@ -98,7 +105,7 @@ class Watch:
                 m = _FN.search(self.decode(self.gen[self.start:-1]))
                 if m is None or m.group(1).strip() not in self.ours:
                     raise ClientCall
-            if len(self.gen) - 1 - self.start > spill.WINDOW:
+            if self.spill and len(self.gen) - 1 - self.start > spill.WINDOW:
                 raise OverWindow
             self.start = None
 

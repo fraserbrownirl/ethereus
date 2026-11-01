@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """The serve.py acceptance test (addendum step 3), on a GPU box. Prints one line per call, exits 1
-on any failure. Three calls in one conversation, then an over-window call for spill.
+on any failure. Three calls in one conversation, each replayed.
 
   python scripts/serve_conversation.py --model DIR --firmware tests/data/rv/eth-bridge.elf
 """
@@ -28,7 +28,7 @@ def main() -> int:
     ap.add_argument("--model", required=True)
     ap.add_argument("--firmware", required=True)
     ap.add_argument("--max-tokens", type=int, default=1500)
-    ap.add_argument("--no-spill", action="store_true")
+    ap.add_argument("--spill", action="store_true", help="needs serve.SPILL_ON_GPU, off for now")
     args = ap.parse_args()
     engine = serve.Engine(args.model, args.firmware)
     app = serve.create_app(engine, ["k"], tempfile.mkdtemp(), args.firmware, sync_seconds=3600)
@@ -62,7 +62,7 @@ def main() -> int:
 
     for ask, cmd, want in ASKS:
         turn(ask, cmd, want, history)
-    if not args.no_spill:
+    if args.spill:
         j = turn(SPILL, "decode", None, [])
         if j is not None and not j["ethereus"]["spilled"]:
             print("note: spill case did not spill (the model may not have made an over-window call)")
