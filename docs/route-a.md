@@ -102,6 +102,17 @@ On-disk merged growth (dense): 9B 19.31 → 32.9 GB (+13.6 GB; 3.3 GB chip-layer
 
 ### 2.2 Gates
 
+**Current gate results: eval VM, pinned venv. These supersede every result below.** VM 58642243, RTX PRO 6000 Blackwell WS 97 GB, driver 580.95.05. Venv `/workspace/venv`, lock file `route-a/gates/venv.lock.txt`: torch 2.15.0+cu132, transformers 5.22.1, fla 0.6.0, triton 3.9.0. Checkpoint `dist/q9-rv2` re-merged there: exit 0, 1:20 wall, 58.5 GB peak RSS. ELF `b320d31b`. Run by `route-a/gates/run_gates.sh`.
+
+| Gate | Result | Numbers | Source on the VM |
+|---|---|---|---|
+| 1, text fidelity | PASS | KL 4.592e-4, floor 4.592e-4, ratio 1.0001 (limit 2x), greedy identical 12/16 | `dist/q9-rv2/rv-text.json` |
+| 2, bf16 on fla | PASS | 18/18 exact, 15,108 positions, 0 mismatches | `dist/q9-rv2/gpucheck.log` |
+| 3, replay of gate 4's records | PASS | 0 wrong predictions on all six | `dist/q9-rv2/gate4.log` |
+| 4, inside Qwen | PASS | 6/6, 0 head mismatches, no lock errors | `dist/q9-rv2/gate4.log`, `chat-<n>.log` |
+
+The ratio's closeness to 1 is chance: per-prompt ratios run from 0.72 to 1.42 and no pair is equal. Earlier results below came from Vast 58623317, whose Python packages changed between gates when vLLM was installed, so they did not share one environment.
+
 **Gates 1–4 PASS on `dist/q9-rv2` — dispatcher-verified 08:58 UTC. `dist/q9-rv1` is retired.**
 
 | Gate | Result | Key numbers | Log |
