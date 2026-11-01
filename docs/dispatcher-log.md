@@ -47,4 +47,5 @@ One line per tick: time (UTC), what changed. Spend is omitted because Fraser mon
 - 2026-11-01 17:55 Fraser: boundary slice in gate 1. 320 cases, every intN and uintN at min, max, max+1, min-1 and every bytesN at N and N+1 bytes. Out of range asserted as errors, in range compared with `eth_abi`. Branch 0 bad; frozen ELF 1 bad, the int256 case, so the slice catches it.
 - 2026-11-01 Over-window gate on `spill-eth-in` rerun after the fixes: see `docs/logs/gate1-spill-nowindow.log` and `gate1-spill-boundary.log` on that branch; suites in `spill-tests.log`.
 - 2026-11-01 Fine-tune regenerated on `spill-eth-in`: `run` 400 rows, 393 spilled; `abi` 800, 314 spilled; `create` 200, with 56 `create2`, all spilled. All 763 spilled rows match the oracle, or for `run` a direct run on the non-spill image. `data/ft1/manifest.json` there. The generator's short `create2` salt was always an error, hidden by the window until now, so earlier data had no `create2`.
+- 2026-11-01 Fraser: hex forms added to the boundary slice, now 576 cases. Branch 0 bad; frozen ELF 1 bad, the known int256 decimal case, so hex was already correct there. Report format changed: rule 6.
 
