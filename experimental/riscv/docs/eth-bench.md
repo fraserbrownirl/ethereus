@@ -211,6 +211,12 @@ words — Qwen can repeat a tiny `files get` answer into the next call,
 but anything bigger must go through the bridge/gateway spill. The
 model never sees full file bytes in-window except through the spill.
 
+## API spec spill test: not met — deferred (2026-11-01)
+
+The spec's test (`eth decode` with 10 words and `eth run erc20` with real calldata, both `spilled: true`, through the worker) is not met. GPU spill is off (`serve.SPILL_ON_GPU`): the first run returned a lock error right after `GO`, because `core.snapshot` resets the circuit's capture state, so a re-prefilled call is not captured. Over-window calls get the firmware's exact `error (too long)`. The reference-machine path passes (`tests/test_rv_filebuf.py`, `tests/test_rv_spill.py`).
+
+Agreed plan (Fraser): no ELF change until both eval configurations have finished on `b320d31b`. Then the host writes the rewritten command into `eth_in` and the firmware prefers it, followed by its own gate 4 and a rerun of this test.
+
 ## Probe table (non-bridge, exact counts)
 
 | call | instr | before | notes |
