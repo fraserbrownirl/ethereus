@@ -45,4 +45,5 @@ One line per tick: time (UTC), what changed. Spend is omitted because Fraser mon
 - 2026-11-01 17:40 Spill branch gate 1: 10,910 cases, 0 mismatches, 6 by-design rejects asserted (`docs/logs/gate1-spill.log` on `spill-eth-in`). Full suite 306 passed, 2 failed, both stale tests; those two files then 93 of 93.
 - 2026-11-01 17:55 Over-window gate on `spill-eth-in` failed, 12 of 14,000: 5 were a real bug, `encode f(int256) 2**255` answered with -2**255, in the frozen ELF too but over the window so unreachable there; 7 were my parser change altering a message. Both fixed on the branch; full rerun running.
 - 2026-11-01 17:55 Fraser: boundary slice in gate 1. 320 cases, every intN and uintN at min, max, max+1, min-1 and every bytesN at N and N+1 bytes. Out of range asserted as errors, in range compared with `eth_abi`. Branch 0 bad; frozen ELF 1 bad, the int256 case, so the slice catches it.
+- 2026-11-01 Over-window gate on `spill-eth-in` rerun after the fixes: see `docs/logs/gate1-spill-nowindow.log` and `gate1-spill-boundary.log` on that branch; suites in `spill-tests.log`.
 
