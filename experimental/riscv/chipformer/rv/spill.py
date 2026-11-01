@@ -16,7 +16,7 @@ from chipformer.rv import elf, ref
 WINDOW = 80  # S.CAP_MAX: tokens the bridge captures between <tool_call> and </tool_call>
 ARG_TOKENS = 32
 FILE_BUF, FILE_BUF_SIZE = 0x900, 4096  # .filebuf in eth-bridge.elf (env/eth/eth.c)
-CMD = re.compile(r"<function=eth>\s*<parameter=cmd>\n?(.*?)\n?</parameter>\s*</function>", re.S)
+CMD = re.compile(r"<function=eth>\s*<parameter=cmd>\n?(.*?)\n?</parameter>\s*</function>", re.DOTALL)
 HEX = re.compile(r"0x[0-9a-fA-F]+\Z")
 
 
