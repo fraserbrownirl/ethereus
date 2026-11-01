@@ -18,7 +18,7 @@ from chipformer.rv import serve
 ALICE = "0x" + "aa" * 20
 ASKS = [("Use eth: what is the selector of transfer(address,uint256)?", "selector", "0xa9059cbb"),
         (f"Use eth: encode transfer(address,uint256) to {ALICE} with amount 100.", "encode", "a9059cbb"),
-        (f"Use eth: run the built-in erc20 balanceOf for {ALICE}.", "run erc20", None)]
+        (f"Use eth with exactly this cmd: run erc20 0x70a08231{'00' * 12}{ALICE[2:]}", "run erc20", None)]
 SPILL = ("Use eth to decode this as ten uint256 values: 0x"
          + "".join(f"{i * 7 + 1:064x}" for i in range(10)))
 
