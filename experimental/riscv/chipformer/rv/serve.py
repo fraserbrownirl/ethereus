@@ -13,7 +13,7 @@ are not streamed.
 
 Env: MODEL, FIRMWARE, SNAPSHOT (optional), ETHEREUS_DATA (default ./serve-data), CAPTURE_HMAC_KEY,
 ETHEREUS_SYNC_SECONDS, ETHEREUS_BUFFERED_STREAM=1, ETHEREUS_BASE=1 (stock checkpoint, no circuit),
-ETHEREUS_SYSTEM_LINE (the +Skills arm's one line about es/).
+ETHEREUS_SYSTEM_LINE (the +Skills arm's one line about es/), ETHEREUS_RATE_MINUTE, ETHEREUS_RATE_DAY.
 """
 
 import hashlib
@@ -545,6 +545,9 @@ def create_app(engine, keys: list[str], data_dir, firmware=None, snapshot=None,
 
 
 def from_env():
+    global RATE_MINUTE, RATE_DAY
+    RATE_MINUTE = int(os.environ.get("ETHEREUS_RATE_MINUTE", RATE_MINUTE))
+    RATE_DAY = int(os.environ.get("ETHEREUS_RATE_DAY", RATE_DAY))
     firmware = os.environ.get("FIRMWARE")
     keys = [k for k in os.environ.get("ETHEREUS_KEYS", "").split(",") if k]
     engine = (BaseEngine(os.environ["MODEL"]) if os.environ.get("ETHEREUS_BASE")

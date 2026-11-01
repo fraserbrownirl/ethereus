@@ -19,6 +19,8 @@ Fraser, 2026-11-01:
 | Host | One Vast VM, 58642243: x86, RTX PRO 6000 Blackwell WS 97 GB, Docker 28.1.1. Harness and model on the same box |
 | Model endpoint | `serve.py` on `172.17.0.1:8080`, one arm at a time, `route-a/gates/serve_arm.sh`. Job config `route-a/gates/job-ethereus.yaml` |
 | Venv | `/workspace/venv`, lock `route-a/gates/venv.lock.txt`: torch 2.15.0+cu132, transformers 5.22.1 |
+| Trial time limit | `[agent].timeout_sec = 2700` (45 min) in a copy of the tasks; nothing else differs. The board sets no limit, but its cost cap stops a runaway agent and its CI stops a step at 190 min; these local models have no cost. A timed-out trial is still verified on the work left behind. Base's 40 trials finished before the limit was added, none anywhere near it |
+| Rate limit | `serve.py`'s limit is lifted for the eval. It returned 429 twice, both inside one looping base trial, which was rerun |
 | Web search | No `EXA_API_KEY`, so no Exa search. The board treats it as optional; board rows on OpenCode may have it |
 | Base arm | Stock `Qwen/Qwen3.5-9B` through `chipformer/rv/serve.py` with `ETHEREUS_BASE=1`, offering only the client's tools |
 | Ethereus arm | `dist/q9-rv2` through `serve.py`, with `eth-bridge.elf` sha256 `b320d31b4fd722ac0adfdbcf1313892967ea1bf8e826bd318138cb167c06c685` |
