@@ -14,3 +14,4 @@ One line per tick: time (UTC), what changed. Spend is omitted because Fraser mon
 - 2026-11-01 08:58 Gate 4 PASS on 9B `q9-rv2`: `run erc20` 114,544 chip tokens, 0 wrong on 114,627 owned positions; gates 3 and 4 complete. GPU hold lifted; Cursor agent ordered to prove one base `vanilla` trial from the Mac.
 - 2026-11-01 09:05 Fraser's eval decisions in. Key audit: 9 tasks use the key, all grader-only, so 28 no-key, not 32. `serve.py` gains client tools, buffered streams and a base engine. Cursor agent ordered to run all modes on both arms.
 - 2026-11-01 09:12 First serve run: `selector` and `run erc20` pass; `encode` hit the token cap (fixed, rerun in progress); spill `decode` lock error, a real design fault in GPU spill. Spill turned off, question filed.
+- 2026-11-01 09:20 Docker cannot run on 58623317 (no CAP_SYS_ADMIN, unshare and mount denied). Rented harness VM 58640793 per Fraser; Vast has no GPU-less offers, so its GPU sits unused.
