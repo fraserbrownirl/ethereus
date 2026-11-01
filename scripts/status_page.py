@@ -191,12 +191,14 @@ def results(data):
 
 
 def timeline():
-    days = {}
+    events = []
     for line in (REPO / "docs/dispatcher-log.md").read_text().splitlines():
-        m = re.match(r"- (\d{4}-\d{2}-\d{2}) \d{2}:\d{2} (.*)", line)
+        m = re.match(r"- (\d{4}-\d{2}-\d{2} \d{2}:\d{2}) (.*)", line)
         if m:
-            days.setdefault(m[1], []).append(m[2])
-    return "".join(f"<p><b>{d}</b> {esc(' '.join(days[d]))}</p>" for d in sorted(days, reverse=True)) or f"<p>{U}</p>"
+            events.append((m[1], m[2]))
+    events.sort(key=lambda e: e[0], reverse=True)
+    items = "".join(f"<li><b>{esc(t)} UTC</b> {esc(x)}</li>" for t, x in events)
+    return f"<ul>{items}</ul>" if items else f"<p>{U}</p>"
 
 
 def main():
