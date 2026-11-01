@@ -156,6 +156,22 @@ Per plan, `route-a/shim/` (thin OpenAI-compat `/v1/chat/completions` → `RvChat
 
 ---
 
+### 2.5 Store checkpoint `q9-store-rv`
+
+VM 58642243, pinned venv, `main` code, `route-a/gates/run_store_gates.sh`. Merge: exit 0, 0:55 wall, 63.2 GB peak RSS, layout `rv1-store`, 12 chip layers, hidden 5888, 37 GB.
+
+| Check | Result | Numbers | Source on the VM |
+|---|---|---|---|
+| Gate 1 | PASS | KL 4.912e-4, floor 4.592e-4, 1.07x, greedy identical 10/16 | `dist-store/q9-store-rv/rv-text.json` |
+| Gate 2 on fla | PASS | 18/18 exact, 0 mismatches | `.../gpucheck.log` |
+| Gates 3 and 4 | PASS | 6/6, 0 head mismatches, no lock errors, 0 wrong on replay; token counts equal `q9-rv2` | `.../gate4.log` |
+| Snapshot verify | PASS | `es/blocks.md`, 136 tokens, equals the reference | `.../verify.log` |
+| Knowledge smoke | Recorded | 4/20 with the store, 3/20 without | `.../smoke.log` |
+
+Smoke reading: `list` returns the right 16 files. The model often answers from memory after listing, invents names such as `es/Fusaka` (`not found`), or hits the 400-token limit while reading `es/index.md`. Mechanics work; the model rarely gets to the right file. No prompt changes, per the rules.
+
+---
+
 ## 3. Baseline eval (Task 3)
 
 | Field | Value |
