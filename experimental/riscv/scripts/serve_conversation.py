@@ -28,7 +28,7 @@ def main() -> int:
     ap.add_argument("--model", required=True)
     ap.add_argument("--firmware", required=True)
     ap.add_argument("--max-tokens", type=int, default=1500)
-    ap.add_argument("--spill", action="store_true", help="needs serve.SPILL_ON_GPU, off for now")
+    ap.add_argument("--spill", action="store_true", help="also the spec's spill test: it must report spilled")
     args = ap.parse_args()
     engine = serve.Engine(args.model, args.firmware)
     app = serve.create_app(engine, ["k"], tempfile.mkdtemp(), args.firmware, sync_seconds=3600)
@@ -64,8 +64,9 @@ def main() -> int:
         turn(ask, cmd, want, history)
     if args.spill:
         j = turn(SPILL, "decode", None, [])
-        if j is not None and not j["ethereus"]["spilled"]:
-            print("note: spill case did not spill (the model may not have made an over-window call)")
+        if j is not None and not j["ethereus"]["spilled"]:  # the spec's test is spilled: true
+            print("FAIL spill case did not spill")
+            bad += 1
     print("RESULT", "PASS" if not bad else f"FAIL {bad}")
     return 1 if bad else 0
 
