@@ -36,7 +36,9 @@ def kl(a, b):
 
 
 def main() -> None:
-    from transformers import AutoModelForImageTextToText, AutoTokenizer, Qwen3_5ForCausalLM
+    # 9B base loads as Qwen3_5TextConfig under transformers 5.22, which
+    # AutoModelForImageTextToText rejects — Qwen3.5 here is text-only.
+    from transformers import AutoTokenizer, Qwen3_5ForCausalLM
 
     ap = argparse.ArgumentParser()
     ap.add_argument("base")
@@ -50,7 +52,7 @@ def main() -> None:
     prompts = [encode(tb, k, t) for k, t in PROMPTS]
     nq = len(tb)
 
-    base = AutoModelForImageTextToText.from_pretrained(args.base, dtype=torch.bfloat16).to(dev)
+    base = Qwen3_5ForCausalLM.from_pretrained(args.base, dtype=torch.bfloat16).to(dev)
     seqs = []
     with torch.no_grad():
         for ids in prompts:
@@ -61,7 +63,7 @@ def main() -> None:
     del base
     gc.collect()
     torch.cuda.empty_cache()
-    eager = AutoModelForImageTextToText.from_pretrained(args.base, dtype=torch.bfloat16,
+    eager = Qwen3_5ForCausalLM.from_pretrained(args.base, dtype=torch.bfloat16,
                                                         attn_implementation="eager").to(dev)
     le = logprobs(eager, seqs, nq, dev)
     del eager
