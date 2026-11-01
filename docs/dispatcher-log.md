@@ -28,3 +28,5 @@ One line per tick: time (UTC), what changed. Spend is omitted because Fraser mon
 - 2026-11-01 14:55 Status console added. Ethereus test built; its first run hit no free VRAM because the base server holds 91 GB, so it now runs after the eval batches, still on ELF `b320d31b`. Judge cost so far $2.65.
 - 2026-11-01 16:05 Fine-tune data generated. Counts and rejects in `experimental/riscv/data/ft1/manifest.json`; 30 knowledge examples in `docs/ft1-sample.md` for review.
 - 2026-11-01 16:40 Fine-tune knowledge rebuilt: 468 distinct answers, largest file share 19.2%, 662 examples. New 30-example sample in `docs/ft1-sample.md`.
+- 2026-11-01 16:22 Gate 4 recheck PASS after `logits_to_keep=1`: 6/6, token counts identical to the pinned run.
+- 2026-11-01 16:22 Base judged batch: 0 of 7 tasks; base total 6 of 30 scored. Judge spend $2.71.
