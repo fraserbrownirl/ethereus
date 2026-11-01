@@ -82,6 +82,38 @@ for arm, names in GROUPS.items():
             else: trials += 1; passed += v == 1; rec.append(v)
     scored = {k: v for k, v in tasks.items() if v}
     out["arms"][arm] = {"tasks_scored": len(scored), "tasks_passed": sum(any(x == 1 for x in v) for v in scored.values()), "trials": trials, "trials_passed": passed, "errors": errors, "file": "/workspace/results/" + names[0] + " and siblings"}
+out["per_task"] = {}
+for arm, names in GROUPS.items():
+    for n in names:
+        for r in glob.glob(f"/workspace/results/{n}/jobs/*/*__*/result.json"):
+            try: d = json.load(open(r))
+            except Exception: continue
+            t = d.get("task_name", "").split("/")[-1]
+            v = (d.get("verifier_result") or {}).get("rewards", {}).get("reward"); e = (d.get("exception_info") or {}).get("exception_type")
+            if v is None and not e: continue
+            out["per_task"].setdefault(t, {}).setdefault(arm, []).append("pass" if v == 1 else "fail" if v == 0 else "error")
+            if v == 0 and e: out["per_task"][t][arm][-1] = "timeout" if "Timeout" in e else "fail"
+def spend(x):
+    if isinstance(x, dict):
+        c = x.get("usage", {}).get("cost_usd", 0) if isinstance(x.get("usage"), dict) else 0
+        return (c or 0) + sum(spend(v) for v in x.values())
+    if isinstance(x, list): return sum(spend(v) for v in x)
+    return 0
+j = 0.0
+for f in glob.glob("/workspace/results/internet-*/jobs/*/*__*/verifier/reward-details.json"):
+    try: j += spend(json.load(open(f)))
+    except Exception: pass
+out["judge_usd"] = round(j, 3)
+out["trial"] = sh("docker ps --format '{{.Names}}|{{.Status}}' | grep env-main | head -1")
+def tail_marks(p, pat):
+    if not os.path.exists(p): return []
+    return [re.sub(r"[^ -~]", "", x)[:110] for x in open(p, errors="replace").read().splitlines() if re.search(pat, x)][-4:]
+out["chain"] = {"Judged batch": tail_marks("/workspace/eval3.log", "RUN_EXIT|EVAL3_DONE|SERVER_FAILED|recheck|serve .* up"),
+                "Gate 4 recheck": ["passed" if os.path.exists("/workspace/gate4-keep1.ok") else "not passed yet"] + tail_marks("/workspace/ethereus/dist/q9-rv2/gate4-keep1/gate4.log", "^GATE4"),
+                "Fork batch": tail_marks("/workspace/eval4.log", "selected|RUN_EXIT|EVAL4_DONE|SERVER_FAILED|serve .* up"),
+                "Ethereus test, before": tail_marks("/workspace/etest-before.log", r"ARM_DONE|TEST_DONE| tool (True|False)"),
+                "Three-call serve rerun": tail_marks("/workspace/serve-recheck.log", "RESULT|EXIT|PASS|FAIL")}
+out["gpu"] = sh("nvidia-smi --query-gpu=memory.used,memory.total,utilization.gpu --format=csv,noheader")
 for tag in ("before", "after"):
     f = f"/workspace/results/ethereus-test/{tag}/summary.txt"
     if os.path.exists(f): out["test"][tag] = {"text": open(f).read()[:1500], "file": f}
@@ -190,6 +222,41 @@ def results(data):
     return "".join(out)
 
 
+def activity(data):
+    if not data:
+        return f"<p>{U}: the eval VM did not answer this tick.</p>"
+    t = data.get("trial") or ""
+    name, _, up = t.partition("|")
+    rows = [f"<p><b>Running trial:</b> {esc(name.split('__')[0]) if name else 'none'}"
+            + (f" ({esc(up)})" if up else "") + f". <b>GPU:</b> {esc(data.get('gpu') or U)}. "
+            f"<b>Judge spend so far:</b> ${data.get('judge_usd', U)} (each usage entry in the reward files).</p>"
+            "<table><tr><th>Automatic chain, in order</th><th>Latest</th></tr>"]
+    for k, v in data.get("chain", {}).items():
+        rows.append(f"<tr><td>{esc(k)}</td><td>{'<br>'.join(esc(x) for x in v) if v else 'not started'}</td></tr>")
+    rows.append("</table>")
+    ft = REPO / "experimental/riscv/data/ft1/manifest.json"
+    if ft.exists():
+        m = json.loads(ft.read_text())
+        rows.append("<h3>Fine-tune data</h3><table><tr><th>Family</th><th>Wanted</th><th>Written</th><th>Held out</th><th>Rejected</th></tr>")
+        for f, d in m["families"].items():
+            rows.append(f"<tr><td>{esc(f)}</td><td>{d['wanted']}</td><td>{d['written']}</td><td>{d['heldout']}</td><td>{esc(d['rejected'])}</td></tr>")
+        rows.append("</table>")
+    return "".join(rows)
+
+
+def per_task(data):
+    if not data or not data.get("per_task"):
+        return f"<p>{U}</p>"
+    arms = ["base", "ethereus"]
+    cls = {"pass": "ok", "fail": "bad", "timeout": "bad", "error": "warn"}
+    rows = ["<details open><summary>Per task, each attempt</summary><table><tr><th>Task</th><th>Base</th><th>Ethereus</th></tr>"]
+    for t in sorted(data["per_task"]):
+        cells = "".join("<td>" + (" ".join(f"<span class='{cls.get(x, '')}'>{x}</span>" for x in data["per_task"][t].get(a, [])) or "not run") + "</td>" for a in arms)
+        rows.append(f"<tr><td>{esc(t)}</td>{cells}</tr>")
+    rows.append("</table></details>")
+    return "".join(rows)
+
+
 def timeline():
     events = []
     for line in (REPO / "docs/dispatcher-log.md").read_text().splitlines():
@@ -211,12 +278,13 @@ def main():
 h2{{color:#fff;border-bottom:1px solid #333;padding-bottom:4px;margin-top:28px}}table{{border-collapse:collapse;width:100%;margin:8px 0}}
 th,td{{border:1px solid #333;padding:4px 7px;text-align:left;vertical-align:top}}th{{background:#1c1c1c}}
 .off{{color:#666}}.f{{color:#888;font-size:12px;word-break:break-all}}pre{{background:#1a1a1a;padding:8px;overflow:auto}}
-summary{{cursor:pointer;color:#9bd}}</style></head><body>
+summary{{cursor:pointer;color:#9bd}}.ok{{color:#6c6}}.bad{{color:#d77}}.warn{{color:#db6}}</style></head><body>
 <h1>Ethereus status</h1>
 <h2>Now</h2><p><b>{time.strftime('%Y-%m-%d %H:%M UTC', time.gmtime())}</b>. {esc(now)}</p>
+<h2>Activity</h2>{activity(data)}
 <h2>Boxes</h2>{boxes(v, data)}
 <h2>Tasks</h2>{tasks()}
-<h2>Results</h2>{results(data)}
+<h2>Results</h2>{results(data)}{per_task(data)}
 <h2>Timeline</h2>{timeline()}
 </body></html>
 """
