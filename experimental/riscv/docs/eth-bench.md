@@ -285,6 +285,14 @@ hex-in/hex-out totals 8,499 at max width — 1.9× cheaper than dec-in/dec-out
 
 ## Firmware sizes
 
+Tracked `eth-bridge.elf` (`c0853b4`): sha256
+`b320d31b4fd722ac0adfdbcf1313892967ea1bf8e826bd318138cb167c06c685`, with `.filebuf`
+at 0x900 and `file_buf` in the symbol table. Source is `880e37d`. The whole-file hash
+changes per build because of debug paths, so compare loaded sections: a rebuild from
+source matches `.text`, `.rodata`, `.ethin`, `.filebuf`, `.data` and the entry point byte
+for byte. The sizes below predate this image: it has `.text 111,652 / .rodata 23,248 /
+.ethin 2,048 / .filebuf 4,096 / .data 20`.
+
 `eth.elf`: .text 97,348 / 262,144 · .rodata 20,792 / 131,072 · .ethin 2,048 ·
 .data 20 · .bss 12.
 `eth-bridge.elf`: .text 102,404 / 262,144 · .rodata 20,864 / 131,072 ·
