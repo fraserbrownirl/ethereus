@@ -201,7 +201,7 @@ def chat_completions(req: ChatRequest):
 
         max_new = req.max_tokens or 4096
         # RvChat.generate(ids, machine, max_new, max_chip, check_head, lock)
-        r = _chat.generate(ids, m, max_new=max_new, check_head=False, lock=lock)
+        r = _chat.generate(ids, m, max_new=max_new, max_chip=1000000, check_head=False, lock=lock)
         text = _chat.text_of(r["tokens"])
         # Surface lock errors as content prefix so trajectories stay verbatim &
         # failures are obvious (do not fabricate a tool response).

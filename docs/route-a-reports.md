@@ -88,3 +88,13 @@ Polling `/Users/fraserbrown/Downloads/route-a-brief.md` every 10m until ~10:00 U
 
 Spend: 58623317 **08:03 UTC = 2.22h ($2.24) @ $1.01/h** since 05:50 UTC; $150/wk cap. Disk 98G/220G, GPU idle (poll only).
 
+## 2026-11-01 08:41 UTC — tasks 13–14 (shim max_chip, eval env check), poll alive + new brief
+
+Per standing rule: appended before chat, then pushed. Poll was down (nohup over SSH died on conn reset) — restarted as local loop 08:41 (PID 18179, `route-a-brief.md` now sha12 `55ea65698a89` 105 lines, added hold 08:05 + tasks 13–14).
+
+- **Gate 4 hold 08:05:** Dispatcher took over diagnosis (`/workspace/diag-chat.log`, `python -u` with stack dumps; ~27k chip tokens per selector on HF path, kills at 90/300s were mid-run, not deadlock). **GPU hold on** — no `chat.py` or eval until lifted. Base HF serve also on hold (same card). Honouring hold; no GPU work since 08:02.
+- **Task 13 — eval env check (added 08:20 UTC):** `docs/harbor.md` line 1 + `runner/README.md`: board jobs run through **Harbor** (`runner/ethevals/job.yaml`, `uv run ethevals plan/run`), every task has `environment/Dockerfile` (GHCR base image, one container per trial) and `environment_mode = "separate"` verifier. **Internet + vanilla both need Docker** (`tasks/*/task.toml: modes = ["vanilla","internet","skills"]`; `docs/harbor.md` planning needs no Docker, but trials do). Judge tasks declare `ANTHROPIC_API_KEY = "${ANTHROPIC_API_KEY}"` (`docs/harbor.md` line 182). Box has **no Docker** (`docker: command not found`) and no `ANTHROPIC_API_KEY` on host — can only `plan`, not `run`. **Finding:** Trials cannot run on 58623317; open question in `docs/dispatcher-questions.md` on `main` (Fraser deciding mode/location). Shim note: `route-a/shim/server.py` `tools = req.tools if req.tools else [ETH_TOOL]` (line 181) → offers `eth` only when client sends no tools; OpenCode sends tools, so no `eth` — do not use shim with OpenCode per brief. 15-min stop met; no eval started.
+- **Task 14 — shim chip cap (added 08:37 UTC):** `RvChat.generate` default `max_chip=60000` cuts `run erc20 balanceOf` (~110k chip tokens) mid-run. Fixed: `route-a/shim/server.py` line 204 `max_chip=1000000` (`grep -n max_chip` shows it). Gate 4 GPU hold still on — not tested on GPU; file change only. 15-min stop met.
+
+Spend: 58623317 **08:41 UTC = 2.85h ($2.88) @ $1.01/h** since 05:50 UTC; $150 cap. Poll 10m/2h live until ~10:41 UTC; no GPU until dispatcher lifts hold.
+
