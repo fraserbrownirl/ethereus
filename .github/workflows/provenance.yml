@@ -1,0 +1,35 @@
+name: provenance
+on:
+  push:
+    paths:
+      - "experimental/riscv/tests/data/rv/**"
+      - "experimental/riscv/chipformer/rv/env/**"
+      - "experimental/riscv/toolchain/**"
+      - "experimental/riscv/scripts/provenance.py"
+      - ".github/workflows/provenance.yml"
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  hashes:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with: { python-version: "3.12" }
+      - run: pip install torch --index-url https://download.pytorch.org/whl/cpu && pip install -e . || pip install pyelftools numpy
+        working-directory: experimental/riscv
+      - run: python scripts/provenance.py --hashes
+        working-directory: experimental/riscv
+  rebuild:
+    runs-on: macos-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with: { python-version: "3.12" }
+      - run: brew install riscv64-elf-gcc
+      - run: pip install torch && pip install -e . || pip install pyelftools numpy
+        working-directory: experimental/riscv
+      - run: pip install "eth-hash[pycryptodome]" py-solc-x tokenizers
+      - run: python scripts/provenance.py
+        working-directory: experimental/riscv

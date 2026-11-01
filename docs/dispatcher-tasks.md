@@ -8,9 +8,9 @@ Single list for the core repo and Route A; the Cursor agent and Muse are retired
 | Judged batch: 6 judged tasks plus witness-string rerun, Internet, both arms | running | | 2026-11-01 13:28 | | |
 | Ethereus test, before the spill fix, three arms | queued | Needs the GPU after the eval batches | | | |
 | Rerun three-call `serve.py` test on the eval VM, then Fraser can destroy 58623317 | queued | Runs automatically after the Ethereus test's before run | | | |
-| Environment pin check: gates log torch, transformers, fla, triton and driver; Results row goes amber on a difference from the pinned venv | queued | Before the spill fix's gate 4 | | | |
-| Canary: one command runs the three-call conversation with replay after any firmware, snapshot, driver or venv change | queued | Before the spill fix's gate 4 | | | |
-| Artefact provenance in CI: rebuild every committed binary and compare loaded sections | queued | Toolchain must match the bench's pins | | | |
+| Environment pin check: gates log torch, transformers, fla, triton and driver; Results row goes amber on a difference from the pinned venv | done | | 2026-11-01 | 2026-11-01 | |
+| Canary: one command runs the three-call conversation with replay after any firmware, snapshot, driver or venv change | queued | Script ready; first run needs the GPU free | 2026-11-01 | | |
+| Artefact provenance in CI: rebuild every committed binary and compare loaded sections | running | Local check passes; CI run being proven | 2026-11-01 | | |
 | Oracle independence test, by hand: one flipped keccak round-constant bit must fail gate 1 | done | | 2026-11-01 | 2026-11-01 | caught: keccak 40/40, create 37/40, selector 15/40 |
 | Malformed-input fuzz per command in gate 1, must give `error (...)` | done | | 2026-11-01 | 2026-11-01 | no crash; 6 lenient forms go with the spill fix |
 | `eth_in` firmware change, its gate 4, the spec's spill test | queued | First firmware change once the 37 tasks and the before test finish (Fraser) | | | |
