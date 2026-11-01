@@ -174,6 +174,9 @@ Smoke reading: `list` returns the right 16 files. The model often answers from m
 
 ## 3. Baseline eval (Task 3)
 
+**Current base result, partial (2026-11-01): Internet, stock Qwen3.5-9B through `serve.py`, thinking off, greedy: 12 of 46 scored trials passed, on 23 of the 24 tasks that need neither the grader key nor an RPC.** Source: `results/internet-nokey-base` and `results/internet-nokey-base-capped` on VM 58642243. Each task ran 2 attempts, which repeat exactly under greedy decoding, so this is 6 of 23 tasks. `signatures-permit2-witness-string` has no score: its first run looped on one `grep` for 189 calls and was stopped, then both limited attempts hit `AgentSetupTimeoutError`; to be rerun. 13 tasks wait on Fraser's RPC URL and Anthropic key. The table below is the earlier plan.
+
+
 | Field | Value |
 |---|---|
 | Status | **Could not run** (blocked on §2 GPU host) |
