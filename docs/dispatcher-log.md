@@ -9,3 +9,4 @@ One line per tick: time (UTC), what changed. Spend is omitted because Fraser mon
 - 2026-11-01 08:15 Addendum received and committed. Snapshot rebuild running. Next: `spill.py` + `serve.py`.
 - 2026-11-01 08:30 Snapshot step done: `boot_fs` snap 6,091 owned positions exact, bytes unchanged, manifest names `b320d31b`, verify 136/136 on real kernels after fixing its empty reference (`c68e3aa`). `spill.py` and `serve.py` committed (`e30f129`, `8e2f944`), 14 model-free tests pass. GPU acceptance queued; needs a test-only merge from main because the store port changed the vocabulary.
 - 2026-11-01 08:33 Gate 4 prompts 1-5 clean. Prompt 6 hit the token budget without calling `run` (model wrote calldata by hand), so a retry with explicit calldata is queued. Quiet ticks: 0.
+- 2026-11-01 08:45 Gate 2 PASS on fla kernels (`dist/q9-rv2/gpucheck-fla2.log`), so the reported fla hang did not reproduce. Serve test merge started. Mac kept awake with `caffeinate`.
