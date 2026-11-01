@@ -10,3 +10,6 @@ __pycache__/
 /games/sources/
 /games/shots/
 /dist/
+
+# Secrets: paste into .env; only .env.example is tracked
+.env
