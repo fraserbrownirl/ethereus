@@ -98,3 +98,16 @@ Per standing rule: appended before chat, then pushed. Poll was down (nohup over 
 
 Spend: 58623317 **08:41 UTC = 2.85h ($2.88) @ $1.01/h** since 05:50 UTC; $150 cap. Poll 10m/2h live until ~10:41 UTC; no GPU until dispatcher lifts hold.
 
+## 2026-11-01 08:49 UTC — CURRENT ORDERS 08:48, tasks 12/13/14 accepted, GPU HOLD
+
+Per standing rule: appended before acting, then pushed. `~/Downloads/poll-brief.sh` exit 0 at 08:49:44 sha12 `a9a1a9d33eb1` printed CURRENT ORDERS (08:48 UTC).
+
+- **Waiting on:** dispatcher for gate 4's last replay.
+- **GPU HOLD:** Do not run `chat.py`, a server, or an eval on the box.
+- **Do now:** nothing else assigned. Tasks 12 (gate 1 F2 → q9-rv2 1.68×), 13 (Harbor+DOCKER need: internet+vanilla both need Docker per `docs/harbor.md` line 1 + `runner/README.md`, box has no Docker or `ANTHROPIC_API_KEY`), and 14 (shim `max_chip=1000000` line 204 `grep -n max_chip` ok) are accepted.
+- **Then:** run `~/Downloads/poll-brief.sh` again (foreground, ≤9 min, exit 0 = new CURRENT ORDERS, exit 3 = no change).
+- **Do not:** commit to `main`, write to `dist/q9-rv2` (dispatcher owns it), or start `/tmp/poll-brief*.sh` loops (old loops killed; `kill 19287` no such process, `pkill -f poll-brief` + `rm /tmp/poll-brief*.sh/.log` done).
+- **Spend:** 58623317 **08:49 UTC = 2.99h ($3.02) @ $1.01/h** since 05:50 UTC; $150 cap. No GPU work until orders change.
+
+Pushed `route-a` as report stream; next `poll-brief.sh` pending.
+
