@@ -1,0 +1,107 @@
+# Generated. JSON is valid YAML. No hub section: this config cannot upload.
+{
+  "harbor_version": "0.24.0",
+  "n_attempts": 2,
+  "retry": {
+    "max_retries": 1
+  },
+  "judge": {
+    "model": "anthropic/claude-opus-5-5",
+    "effort": "high",
+    "paid_by": "api_key",
+    "cost_limit_usd": 2.0,
+    "key_env": "ANTHROPIC_API_KEY"
+  },
+  "modes": [
+    "internet",
+    "skills"
+  ],
+  "models": {
+    "q9-base": {
+      "name": "ethereus/q9-base"
+    },
+    "q9-rv2": {
+      "name": "ethereus/q9-rv2"
+    }
+  },
+  "agents": {
+    "opencode-q9-base": {
+      "name": "opencode",
+      "import_path": "ethevals.opencode:OpenCode",
+      "version": "1.18.33",
+      "model": "q9-base",
+      "modes": [
+        "internet",
+        "skills"
+      ],
+      "paid_by": "free",
+      "cost_limit_usd": 0.0,
+      "env": {
+        "ETHEREUS_API_KEY": "${ETHEREUS_API_KEY:-}"
+      },
+      "kwargs": {
+        "opencode_config": {
+          "provider": {
+            "ethereus": {
+              "npm": "@ai-sdk/openai-compatible",
+              "name": "Ethereus eval server",
+              "options": {
+                "baseURL": "http://172.17.0.1:8080/v1",
+                "apiKey": "{env:ETHEREUS_API_KEY}"
+              },
+              "models": {
+                "q9-base": {
+                  "name": "q9-base",
+                  "tool_call": true,
+                  "limit": {
+                    "context": 65536,
+                    "output": 8192
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "opencode-q9-rv2": {
+      "name": "opencode",
+      "import_path": "ethevals.opencode:OpenCode",
+      "version": "1.18.33",
+      "model": "q9-rv2",
+      "modes": [
+        "internet",
+        "skills"
+      ],
+      "paid_by": "free",
+      "cost_limit_usd": 0.0,
+      "env": {
+        "ETHEREUS_API_KEY": "${ETHEREUS_API_KEY:-}"
+      },
+      "kwargs": {
+        "opencode_config": {
+          "provider": {
+            "ethereus": {
+              "npm": "@ai-sdk/openai-compatible",
+              "name": "Ethereus eval server",
+              "options": {
+                "baseURL": "http://172.17.0.1:8080/v1",
+                "apiKey": "{env:ETHEREUS_API_KEY}"
+              },
+              "models": {
+                "q9-rv2": {
+                  "name": "q9-rv2",
+                  "tool_call": true,
+                  "limit": {
+                    "context": 65536,
+                    "output": 8192
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    }
+  }
+}
