@@ -102,34 +102,42 @@ On-disk merged growth (dense): 9B 19.31 → 32.9 GB (+13.6 GB; 3.3 GB chip-layer
 
 ### 2.2 Gates
 
-**Gate 1 (textcheck) on `dist/q9-rv2`: PASS, 2026-11-01 07:38 UTC. This supersedes the `q9-rv1` FAIL below.**
+**Gates 1–4 PASS on `dist/q9-rv2` — dispatcher-verified 08:58 UTC. `dist/q9-rv1` is retired.**
 
-| Checkpoint | KL merged (mean) | Noise floor (mean) | Ratio (pass ≤ 2×) | Greedy identical | Top-1 agree (mean) | Max per-prompt KL |
-|---|---|---|---|---|---|---|
-| `dist/q9-rv1` (tied head) | 12.29 | 3.77e-4 | 32,581× FAIL | 0/16 | 0.0 | not recorded |
-| `dist/q9-rv2` (fix `1500fba`) | 6.34e-4 | 3.77e-4 | 1.68× PASS | 12/16 | 0.989 | 9.79e-4 |
+| Gate | Result | Key numbers | Log |
+|---|---|---|---|
+| **1 textcheck** | **PASS** | KL merged 6.34e-4, floor 3.77e-4, ratio **1.68× ≤2×**; greedy **12/16**, top-1 0.989, per-prompt max 9.79e-4 | `dist/q9-rv2/rv-text.json` |
+| **2 gpucheck --decode** | **PASS (fla)** | **18/18 exact**, **15,108 positions**, `kernels: fla` | `dist/q9-rv2/gpucheck-fla2.log` |
+| **3 execcheck+replay** | **PASS** | **0 wrong** on **6,028 / 53,917 / 14,790 / 18,314 / 58,205 / 114,627** owned (replay of gate-4 records; no `records.jsonl` in tree) | gate-4 replay |
+| **4 chat+replay** | **PASS** | 6/6: **head mismatches 0, lock error None, `ok: True` 0 wrong** (6c is `run erc20` 114,544 chip tok) | `dist/q9-rv2/chat-1..5.log`, `chat-6c.log` |
 
-Cause (F2): `Qwen/Qwen3.5-9B` is untied (`tie_word_embeddings: false`). `merge.py` dropped `lm_head.weight` and forced tying, so the merged model decoded with the embedding. Checks on `q9-rv1`: first-Qwen-layer input exact on base dims, one chip dim nonzero at about 9e-13; config differs from base only in intended widening fields plus `tie_word_embeddings`; `embed_tokens[:248320, :4096]` equals base exactly; `lm_head` does not. Fix: `merge.output_head` keeps the base head on Qwen's rows and dims, and the embedding's chip columns and RV32 rows. Tied bases such as the 4B write no `lm_head` and keep tying.
+**Gate 1 F2 (history):** `Qwen/Qwen3.5-9B` untied (`tie_word_embeddings: false`); `q9-rv1` dropped `lm_head.weight` (KL 32,581×). Fix `1500fba` keeps base head on Qwen rows/dims + embedding chip/RV32 rows. `q9-rv2` merge 2:59.74 wall, RSS 57.9 GB, `tie_word_embeddings false`, `lm_head.weight` in index.
 
-`q9-rv2` merge: exit 0, 2:59.74 wall, peak RSS 57.9 GB (57,870,728 kB), `tie_word_embeddings: false`, `lm_head.weight` in the index. Shard hashes: `dist/q9-rv2/sha256sums.txt` on the box.
+**Gate 2:** dispatcher reran on fla 0.6.0 / CUDA 13 / torch 2.15 → 18/18 exact, 15,108 positions (signext 45/45, call 475/475, memcpy 160/160, rv32ui-lb 193/193, rv32ui-sh 624/624, rv32ui-jalr 100/100, rv32ui-sra 717/717, c-crc32 4166/4166, c-strops 1074/1074). My earlier fla hang (no output, killed 6 min) did not reproduce.
 
-Caveats: the 4 non-identical greedy runs are prompts 4, 5, 7 and 9, and textcheck's pass condition is the KL ratio, not greedy identity. The ratio is higher than the 4B's 1.2×. `textcheck.py` exits 0 on failure, so read the KL. Gate 2 ran before this fix and builds its own circuit model, not this checkpoint, so it stands. Gates 3 and 4 have not run on `q9-rv2`.
+**Gate 3:** no `*.jsonl` records in `experimental/riscv/tests/data/rv/` (and nowhere in repo per `git log`/`find`); dispatcher confirms gate 3 is the replay of gate 4's records — 0 wrong on the six owned counts above.
 
-1. **`rv/textcheck.py` — FAIL — `kl_merged_mean 12.29` vs floor `0.000377` = 32,581× (pass ≤2×).**
-   - **Runner:** `cd /workspace && PYTHONPATH=ethereus/experimental/riscv:ethereus python3 -m chipformer.rv.textcheck /workspace/models/Qwen3.5-9B /workspace/ethereus/dist/q9-rv1 --out rv-text.json` (commit `0c11495` — `textcheck: load base via Qwen3_5ForCausalLM (transformers 5.22)`; note: base `Qwen3_5TextConfig` under transformers 5.22 is rejected by `AutoModelForImageTextToText`, so base now loads via `Qwen3_5ForCausalLM` like merged).
-   - **Numbers:** `kl_merged_mean 12.294`, `kl_noise_floor_mean 0.000377`, ratio **32,581×**, `greedy_identical 0/16`, `tokenizer_identical 4/4 true`, `top1_agree 0.0` mean (every token mispredicted). Per-prompt `kl_merged [12.20, 13.40, 12.63, 12.50, …]`, `kl_noise_floor [0.00038, 0.00019, …]`. No missing-weight warnings in log (only tokenizer-regex + triton warnings).
-   - **Cause (dispatcher STOP NOTICE 07:25, verified):** `Qwen/Qwen3.5-9B` has `tie_word_embeddings: false` (`lm_head.weight` differs from `embed_tokens.weight` by ≤0.48); `merge.py` line 101 writes `tie_word_embeddings=True` and drops `lm_head.weight` (treats as tied), so the merged model decodes with the embedding matrix. Verified: cloning `q9-rv1`'s tied head, overwriting `[:248320, :4096]` with base `lm_head.weight` and `tie_word_embeddings=False` → coherent greedy ("The capital of France is" → " Paris.", "Ethereum is" → " a decentralized, open-source blockchain…"). The 4B never hit this (tied). Do not patch `merge.py` — awaiting `main` commit carrying untied head (task 12).
-   - **Verdict:** Gate 1 **FAIL** — **F2: untied `lm_head` dropped by merge (KL 32k× floor, greedy 0/16)**. No further gate/chat/eval work on `q9-rv1` until `q9-rv2` re-merge.
+**Gate 4 (6 prompts, ELF `b320d31b4fd722ac0adfdbcf1313892967ea1bf8e826bd318138cb167c06c685` from `c0853b4`, `.filebuf` PROGBITS 0x900 4 KiB):**
+- `chat-1.log` (selector `transfer(address,uint256)`) 76t+6006c 6.0s — `0xa9059cbb`, replay 6028 owned 0 wrong.
+- `chat-2.log` (`keccak 0x6161`) 191t+53839c 32.2s — `0xdfa57c…684f`, 53917 owned 0 wrong.
+- `chat-3.log` (`u256 0xffffffff * 0xffffffff`) 101t+14758c 9.8s — `18446744065119617025`, 14790 owned 0 wrong.
+- `chat-4.log` (`encode transfer … 0xdEaD 100`) 439t+18164c 26.0s — calldata `0xa9059cbb…dead…0064`, 18314 owned 0 wrong.
+- `chat-5.log` (`create 0xdEaD 1`) 225t+58151c 35.2s — `0x2387b338…2642`, 58205 owned 0 wrong.
+- `chat-6c.log` (`run erc20 0x70a08231…aaaa…` via `/workspace/gate4c.py` with `RvChat(..., executor=True)`, `max_chip=1000000`, full `eth` schema) 304t+**114544c** 68.5s — `0x00…00` + `2541`, **114627 owned 0 wrong** — gate 4 PASS for `run erc20`. `chat-6.log` (calc-only schema, no `run` → model did not call `run`) and `chat-6b.log` (60k chip cap → truncation at 60590) are **expected non-passing illustrations**, not gate failures.
 
-2. **`rv/gpucheck.py --decode` — PASS (fallback), fla rerun hung.**
-   - **Fallback (gate):** `device RTX 6000D, bf16, kernels: torch fallbacks` (flash-linear-attention not loaded as fla kernels; `kernels: fla` requires `import fla` importable, here it was not on first run). All 9 programs ×2 modes = 18 lines `exact`: `signext 45/45 (2.4/2.7s), call 475/475 (2.8/12.0s), memcpy 160/160 (2.1/5.1s), rv32ui-lb 193/193, rv32ui-sh 624/624, rv32ui-jalr 100/100, rv32ui-sra 717/717, c-crc32 4166/4166 (13.4/94.9s), c-strops 1074/1074`. `GATE gpucheck EXIT=0`.
-   - **Fla rerun (task 6):** `kernels: fla` (fla 0.6.0 installed, CUDA 13 / torch 2.15) — hung after header (no program output, killed at 6 min; `chunk_gated_delta_rule not in fla namespace`). Recorded as `gpucheck-fla.log`; gate proceeds on fallback per brief.
+**Correction:** my "chip exec deadlock" filing (08:02) was wrong — cause was **calc-only schema** (`chipformer/rv/tools.py` `CALCULATOR_TOOL` lacks `run`; gate 4 needs full firmware schema via `firmware_tools(F)`) + mid-run kills (selector ≈6000 chip tok / 6s on HF path; my 90s/300s kills were still generating). Withdrawn.
 
-3. **`rv/execcheck.py` + `rv/replay.py` (6 reference records):** The six reference records are not in the tree — `experimental/riscv/tests/data/rv/*.jsonl` does not exist and no `records` artifact is referenced by the plan. **Could not run — no records file in repo.**
+**Firmware:** `tests/data/rv/eth-bridge.elf` at sha `b320d31b…` / commit `c0853b4`, `.filebuf` 0x900 4 KiB, in `route-a` as `76cb200`.
 
-4. **`rv/chat.py --firmware tests/data/rv/eth-bridge.elf --ask …` (6 prompts):** **BLOCKED 2026-11-01 07:55 UTC — `chat --check` hangs** on `dist/q9-rv2` with new ELF `b320d31b…` (`c0853b4`, `.filebuf` present) — after `Loading weights: 581/581` (q9-rv2 35 GB) no output for >90s, both `fast` (default) and `--slow` hang; killed at 90s timeout (fast: 1.5m CPU, slow: 0.9m). Brief asked `--executor` but `chat.py` has `--slow`/`--check` (no `--executor`). `vllm serve` also blocked: `Qwen3_5ForConditionalGeneration` not in vLLM 0.32 registry (HF server fallback per brief stop rule: 3 vLLM attempts → HF server). **Stop rule: three failed attempts or 15 min → report log** — will retry with `timeout` and `strace`/`--verbose` and file as finding if persistent. Gate 1 PASS on q9-rv2 (`KL 1.68×, 12/16 greedy`), gate 2 PASS (fallback), gate 3 could-not-run (no records.jsonl).
+1. **`rv/textcheck.py` on `dist/q9-rv1` — FAIL (history, superseded).** `cd /workspace && PYTHONPATH=... python3 -m chipformer.rv.textcheck /workspace/models/Qwen3.5-9B /workspace/ethereus/dist/q9-rv1 --out rv-text.json` → KL 12.29 / floor 3.77e-4 = 32,581×, greedy 0/16, top1 0.0. **F2 untied-head** cause verified; gate is now the `q9-rv2` PASS row above (1500fba).
 
-No local `tokens/s` measured. P3 reference on L4: ~250 chip tok/s (HF) / 3,200 (executor); text tok ~68 ms at batch-1.
+2. **`rv/gpucheck.py --decode` on `dist/q9-rv2` — PASS (fla).** My fallback (07:06) `kernels: torch fallbacks` 18/18 exact (same counts). Dispatcher gate `kernels: fla` (fla 0.6.0) 18/18 exact, 15,108 positions in `gpucheck-fla2.log` — gate.
+
+3. **`rv/execcheck.py` + `rv/replay.py` — see gate 3 row above (0 wrong on six owned counts via gate-4 replay; no standalone records file).**
+
+4. **`rv/chat.py` — see gate 4 row above (6/6 PASS on `q9-rv2`). My 07:55/08:02 BLOCKED is withdrawn — re-detailed in gate 4 table.
+
+Measured on RTX 6000D (gate-4 HF path, 08:43 UTC): chip ≈ 1700–1700 tok/s burst (e.g. chat-2 53839c/32.2s = 1671c/s, chat-5 58151c/35.2s = 1652c/s, chat-6c 114544c/68.5s = 1672c/s, chat-1 6006c/6.0s = 1001c/s with short run), text tok batch-1 ≈ 30–40 ms (chat-1 76t/6.0s with chip overlapped). P3 L4 reference 250 chip tok/s / 3200 (executor) still cited for context.
 
 ### 2.3 Shim (Task 4 dependency, built in merge window)
 
@@ -218,7 +226,7 @@ All steps beyond Task 1 and shim are **could not run** at 2026-11-01T14:05+04 (w
 - No failures on Task 1; table + VRAM budget are complete and reproducible via `experimental/riscv/.venv/bin/python` + unauthenticated HF Hub. Circuit for 9B verified (`dims 2918`, `heads 103`, `slots 1265`, `hidden 5632`). Attempted local 9B download stopped per operator — no 19 GB pull over unauthenticated connection; merge must run on a provisioned host.
 - **Shim bugs fixed (2026-11-01):** `RvChat(firmware=…)` does not exist (firmware is per-request `ref.Machine`), `generate()` requires `machine` positional, and prompt construction must use `prompt_ids(msgs, tools=[ETH_TOOL])` not raw concatenation. Fixed in `route-a/shim/server.py`.
 - MoE merge unsupported: `chipformer/rv/merge.py:build_merged` reads `text_config.intermediate_size` (MoE has `None`); no expert sharding exists. Filing as **F1: MoE merge path missing** — needed only if a future pick were MoE.
-- Gates 1–2 ran on Vast 58623317 (RTX 6000D 85 GB) 2026-11-01: gate 2 **PASS** on fallback (18/18 exact), fla rerun hung (recorded); gate 1 **FAIL** `kl 12.3` (32k× floor, greedy 0/16) — filed as F2. Gates 3–4 could not run: no `records.jsonl` in tree; gate 4 deferred to rebuilt `.filebuf` ELF (task 9).
+- **2026-11-01 08:58 gates 1–4 PASS on `dist/q9-rv2` (dispatcher, RTX 6000D):** gate 1 KL 1.68× (12/16 greedy), gate 2 18/18 exact 15,108 pos (fla), gate 3 0 wrong on 6,028/53,917/14,790/18,314/58,205/114,627 (replay; no records.jsonl in tree), gate 4 6/6 head 0 lock None (chat-6c 114,544 chip tok `run erc20` via gate4c.py). My 08:02 "deadlock" was wrong — calc-only schema cause. `q9-rv2` merge 2:59.74 57.9 GB RSS. My 07:06 gpucheck fallback 18/18 exact superseded by dispatcher fla-PASS; q9-rv1 F2 kept as history.
 
 ---
 

@@ -111,3 +111,22 @@ Per standing rule: appended before acting, then pushed. `~/Downloads/poll-brief.
 
 Pushed `route-a` as report stream; next `poll-brief.sh` pending.
 
+## 2026-11-01 08:58 UTC — CURRENT ORDERS 08:58 received (GPU hold lifted, gates 1–4 PASS verified, steps 1–3 assigned)
+
+Per standing rule: appended before acting, then pushed. `~/Downloads/poll-brief.sh` exit 0 at 08:58:12 sha12 `87dd9bb71447` printed CURRENT ORDERS (08:58 UTC).
+
+- **Previous:** 08:48 hold (waiting on gate 4 last replay, tasks 12/13/14 accepted). New orders lift hold.
+- **GPU:** hold lifted. `dist/q9-rv2` is current, `dist/q9-rv1` retired. Dispatcher serve test runs from `/workspace/dist-main` (PID 18051/18052, 30.3 GB VRAM on RTX 6000D, `scripts/serve_conversation.py --model /workspace/dist-main/q9-main`); must check `nvidia-smi` before loading model and leave those processes alone. Verified 08:59:34 on box: 30,388 MiB used, 1 process.
+- **Step 1 assigned:** Record in `docs/route-a.md` the dispatcher's verified gate numbers:
+  - Gate 1: KL 6.34e-4 / floor 3.77e-4 = 1.68× (PASS ≤2×).
+  - Gate 2 on fla: 18/18 exact, 15,108 positions, `dist/q9-rv2/gpucheck-fla2.log` (earlier fla hang did not reproduce).
+  - Gate 4: `chat-1.log`..`chat-5.log` + `chat-6c.log` (114,544 chip tokens, driver `/workspace/gate4c.py` for `max_chip=1000000`) all head mismatches 0, lock errors none; `chat-6.log` (no explicit calldata) and `chat-6b.log` (60k cap) recorded as non-passing illustrations.
+  - Gate 3: no `records.jsonl` in tree, so replay of gate 4's records — 0 wrong on 6,028 / 53,917 / 14,790 / 18,314 / 58,205 / 114,627 owned positions.
+  - Correction: my "chip exec deadlock" filing wrong — cause was calc-only schema.
+- **Step 2 assigned:** Prove one base `vanilla` trial end-to-end: Harbor needs Docker, so run on this Mac (has Docker) with model on box. Serve `/workspace/models/Qwen3.5-9B` on box port 8000 via HF server (`setsid nohup` to survive SSH), tunnel `ssh -N -L 8000:localhost:8000 ethereus-vast` from Mac, clone `BuidlGuidl/ethevals` on Mac, run ONE `vanilla` trial of a Concepts task whose `task.toml` lacks `ANTHROPIC_API_KEY`, pointing model at tunnel. Report arm64 image error if it occurs.
+- **Step 3 assigned:** If that trial scores, run base `vanilla` on all no-key Concepts tasks (`route-a/trajectories/baseline/`) then same tasks on `dist/q9-rv2` via `route-a/shim/` (`route-a/trajectories/ethereus/`), report each score labelled `vanilla, no-key subset` with n.
+- **Rules:** Stop rule 3 fails or 15 min no progress on step 2 → report then poll; eval in background may continue while polling. Do not commit to `main`, write to `/workspace/dist-main`, or start `/tmp/poll-brief*.sh`. Then run `~/Downloads/poll-brief.sh` again.
+- **Spend:** 58623317 **09:00 UTC ~3.17h (~$3.20) @ $1.01/h** since 05:50 UTC; $150 cap. Holding poll loop; executing step 1 next.
+
+Pushed `route-a` as report stream; next `poll-brief.sh` pending after steps 1–3.
+
