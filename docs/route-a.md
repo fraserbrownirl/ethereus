@@ -93,20 +93,27 @@ On-disk merged growth (dense): 9B 19.31 → 32.9 GB (+13.6 GB; 3.3 GB chip-layer
 
 | | Value |
 |---|---|
-| Status | **Could not run — no execution environment with required resources** |
-| Reason | Local host is macOS M-series (51 GB unified RAM, no NVIDIA GPU; `nvidia-smi` not found). Merge is CPU/RAM-bound but needs the 9B base weights (19.31 GB) on disk first; local download was stopped per operator (19 GB over unauthenticated connection). Remote hosts `podminer-vps`/`hostinger-vps` have no GPU; `podbank-vast` unreachable. No 80 GB GPU host provisioned for gates/evals. |
-| Circuit (verified) | `circuit {layers: 11, dims: 2918, heads: 103, ffn_units: 42114, max_heads: 16, max_units: 8149}, slots 1265, hidden 5632 (m=22), 11 chip layers` — confirmed on 2026-11-01 via `core.build(Target(16,32,12288))` for `Qwen/Qwen3.5-9B` (same as 4B; circuit is model-size-independent for dense Qwen3.5). |
-| Expected VRAM (merged) | 32.9 GB weights + 0.17 GB state+KV = 33.1 GB @4096; well under 80 GB. Gates require GPU (textcheck/gpucheck/execcheck/replay/chat) and must be run on a provisioned host. |
-| Next step | Provision a GPU host (≥64 GB RAM, 80 GB VRAM) with authenticated HF access. On that host: `snapshot_download("Qwen/Qwen3.5-9B")` (19 GB), `python -m chipformer.rv.merge <base> --out dist/q9-rv1`, then gates §2.2. Record peak RAM (`/usr/bin/time -v` or `psutil`) and wall time. |
+| Status | **Done on Vast.ai 58623317 (RTX 6000D 85 GB, 629 GiB RAM) — 2026-11-01 06:44:52 UTC** |
+| Command | `cd /workspace && PYTHONPATH=ethereus/experimental/riscv:ethereus python3 -m chipformer.rv.merge /workspace/models/Qwen3.5-9B --out /workspace/ethereus/dist/q9-rv1` |
+| Output | `circuit {layers: 11, dims: 2918, heads: 103, ffn_units: 42114, max_heads: 16, max_units: 8149}, slots 1265, hidden 5632 (m=22), 11 chip layers` — `{"hidden": 5632, "chip_layers": 11, "slots": 1265, "circuit": {"layers": 11, "dims": 2918, "heads": 103, "ffn_units": 42114, "max_units": 8149, "max_heads": 16}}` |
+| `/usr/bin/time -v` | Wall 3:55.16, User 533.20s, System 589.32s (477% CPU), max RSS 54,793,460 kB (52.3 GiB), 44M minor faults, 570 major, FS 23M in / 60M out |
+| Chipformer.json | `hidden 5632 (d0 4096 + 22 ballast), chip_dims_offset 4096, chip_token_offset 248320, chip_vocab 230324, qwen_layers_from 11, muted true, code_dims [4250..4270], tau 4273 mu 4272, nfam 5 npay 16` |
+| On-disk | 13 shards `model-00001-of-00013` … `model-00013-of-00013` (29 GB), `sha256sums.txt` on box (first: `66cff6b8…`); `config.json` `hidden_size 5632` 43 layers (11 chip + 32 Qwen) |
 
 ### 2.2 Gates
 
-All four gates are **could not run** on 2026-11-01 (no merged checkpoint). Expected wiring and pass criteria are pre-registered:
+1. **`rv/textcheck.py` — FAIL — `kl_merged_mean 12.29` vs floor `0.000377` = 32,581× (pass ≤2×).**
+   - **Runner:** `cd /workspace && PYTHONPATH=ethereus/experimental/riscv:ethereus python3 -m chipformer.rv.textcheck /workspace/models/Qwen3.5-9B /workspace/ethereus/dist/q9-rv1 --out rv-text.json` (commit `0c11495` — `textcheck: load base via Qwen3_5ForCausalLM (transformers 5.22)`; note: base `Qwen3_5TextConfig` under transformers 5.22 is rejected by `AutoModelForImageTextToText`, so base now loads via `Qwen3_5ForCausalLM` like merged).
+   - **Numbers:** `kl_merged_mean 12.294`, `kl_noise_floor_mean 0.000377`, ratio **32,581×**, `greedy_identical 0/16`, `tokenizer_identical 4/4 true`, `top1_agree 0.0` mean (every token mispredicted). Per-prompt `kl_merged [12.20, 13.40, 12.63, 12.50, …]`, `kl_noise_floor [0.00038, 0.00019, …]`. No missing-weight warnings in log (only tokenizer-regex + triton warnings).
+   - **Verdict:** Gate 1 **FAIL** — merged diverges catastrophically from base on all 16 prompts. This is not a prompt or metric issue; the widened path likely corrupts Qwen's base routing. Filing as **F2: textcheck gate blocked — merged KL 12.3 (32k× floor), greedy 0/16**.
 
-1. **`rv/textcheck.py` (16 prompts):** `KL(merged||base)` vs `KL(base sdpa||eager)` noise floor; pass = within 2×. Prior P3 value on 4B: merged KL `6.1e-4`, floor `5.1e-4` (ratio 1.2×). Will record per-prompt KL and greedy-match count.
-2. **`rv/gpucheck.py --decode`:** bf16 bit-exactness across circuit dims on fla kernels (`chunk_gated_delta_rule` + `fused_recurrent_gated_delta_rule`). Pass = bit-exact on every IR dim at every position. This is the route's stop risk (wider `5632` changes fla tiling; 4B at `3968` is bit-exact). On failure, will record `dims`/`positions` and stop per hard rule.
-3. **`rv/execcheck.py` + `rv/replay.py` (6 reference records):** 0 lock errors, 0 head mismatches. `bridge.py` ownership model.
-4. **`rv/chat.py --firmware tests/data/rv/eth-bridge.elf --ask …` (6 prompts):** `selector of transfer(address,uint256)`, `keccak`, `u256`, `encode`, `create`, `run erc20 balanceOf`; each replayed → clean. Plus `rv/eth.py --cases` spot-check.
+2. **`rv/gpucheck.py --decode` — PASS (fallback), fla rerun hung.**
+   - **Fallback (gate):** `device RTX 6000D, bf16, kernels: torch fallbacks` (flash-linear-attention not loaded as fla kernels; `kernels: fla` requires `import fla` importable, here it was not on first run). All 9 programs ×2 modes = 18 lines `exact`: `signext 45/45 (2.4/2.7s), call 475/475 (2.8/12.0s), memcpy 160/160 (2.1/5.1s), rv32ui-lb 193/193, rv32ui-sh 624/624, rv32ui-jalr 100/100, rv32ui-sra 717/717, c-crc32 4166/4166 (13.4/94.9s), c-strops 1074/1074`. `GATE gpucheck EXIT=0`.
+   - **Fla rerun (task 6):** `kernels: fla` (fla 0.6.0 installed, CUDA 13 / torch 2.15) — hung after header (no program output, killed at 6 min; `chunk_gated_delta_rule not in fla namespace`). Recorded as `gpucheck-fla.log`; gate proceeds on fallback per brief.
+
+3. **`rv/execcheck.py` + `rv/replay.py` (6 reference records):** The six reference records are not in the tree — `experimental/riscv/tests/data/rv/*.jsonl` does not exist and no `records` artifact is referenced by the plan. **Could not run — no records file in repo.**
+
+4. **`rv/chat.py --firmware tests/data/rv/eth-bridge.elf --ask …` (6 prompts):** **Deferred to task 9's rebuilt ELF** (current `eth-bridge.elf` at `9dee31a` sha256 `8a49492d…736d9` predates `@file` buffer; `readelf -S` has no `.filebuf`, `nm` has no `file_buf`). Will run `chat … --executor --check --ask` for the six prompts (`selector of transfer…`, `keccak`, `u256`, `encode`, `create`, `run erc20 balanceOf`) with replay, once dispatcher sends ELF hash. Pass = `head mismatches 0, lock error 0` + replay 0 errors + tokens/s from `[... text + ... chip tokens in ...s]`.
 
 No local `tokens/s` measured. P3 reference on L4: ~250 chip tok/s (HF) / 3,200 (executor); text tok ~68 ms at batch-1.
 
@@ -139,6 +146,12 @@ Per plan, `route-a/shim/` (thin OpenAI-compat `/v1/chat/completions` → `RvChat
 | Skills variant | Re-run as Internet+Skills if `ethskills.fs` exists on `main` (check `ls main:ethskills.fs 2>/dev/null`); else skip and note |
 | Shim | `route-a/shim/server.py` implements `ETH_TOOL` (`name=eth`, `cmd` string → `<function=eth><parameter=cmd>…>`). Per-request `elf.program(FIRMWARE)` → `BR.park(m)` → `prompt_ids(msgs, tools=[ETH_TOOL])` → `generate(ids, m, lock=Session)`. Smoke test: `MODEL=dist/q4-rv1 ./route-a/shim/test_smoke.sh` — pending GPU. **2026-11-01:** fixed 3 bugs (wrong RvChat kwargs, missing machine arg, broken prompt templating). |
 | Next step | Once gate 4 is green, `./route-a/shim/run.sh &` then `opencode --endpoint http://localhost:8001/v1 ... --out route-a/trajectories/ethereus` |
+
+### 2.5 Bootstrapped firmware skills (extra task)
+
+**Runner:** `scripts/boot_fs.py --manifest build/ethskills.manifest.json --mode verify` + `scripts/smoke_knowledge.py` on `dist/q9-rv1` with the store+eth firmware (once task 9 ELF lands).
+
+**Finding (pre-run, recorded per operator):** `dist/q9-rv1` is layout **`rv1`** (11 chip layers, no store circuit); `chipformer.json` is `layout rv1, hidden 5632, chip_layers 11, chip_dims 2918` with no `store`/`ethskills` keys. `ethskills.fs.npz` (store circuit) **cannot load into it** — the store merge (`python -m chipformer.rv.merge BASE --out dist/q9-store --store`) is a separate artifact, scheduled for after evals per task 9's `stop rule: do not start the "Internet + Skills" variant on dist/q9-rv1`. Will record `boot_fs` skip as `rv1 has no store` and `smoke_knowledge` as `base vs --fs N/A` pending `q9-store-rv` build.
 
 Shim files staged:
 
@@ -191,7 +204,7 @@ All steps beyond Task 1 and shim are **could not run** at 2026-11-01T14:05+04 (w
 - No failures on Task 1; table + VRAM budget are complete and reproducible via `experimental/riscv/.venv/bin/python` + unauthenticated HF Hub. Circuit for 9B verified (`dims 2918`, `heads 103`, `slots 1265`, `hidden 5632`). Attempted local 9B download stopped per operator — no 19 GB pull over unauthenticated connection; merge must run on a provisioned host.
 - **Shim bugs fixed (2026-11-01):** `RvChat(firmware=…)` does not exist (firmware is per-request `ref.Machine`), `generate()` requires `machine` positional, and prompt construction must use `prompt_ids(msgs, tools=[ETH_TOOL])` not raw concatenation. Fixed in `route-a/shim/server.py`.
 - MoE merge unsupported: `chipformer/rv/merge.py:build_merged` reads `text_config.intermediate_size` (MoE has `None`); no expert sharding exists. Filing as **F1: MoE merge path missing** — needed only if a future pick were MoE.
-- No 80 GB runner configured for gates/evals. Filing as **Ops: provision runner with HF_TOKEN + Vast/Lambda credentials**. Gates `2–4` require CUDA (textcheck, gpucheck --decode, execcheck, chat).
+- Gates 1–2 ran on Vast 58623317 (RTX 6000D 85 GB) 2026-11-01: gate 2 **PASS** on fallback (18/18 exact), fla rerun hung (recorded); gate 1 **FAIL** `kl 12.3` (32k× floor, greedy 0/16) — filed as F2. Gates 3–4 could not run: no `records.jsonl` in tree; gate 4 deferred to rebuilt `.filebuf` ELF (task 9).
 
 ---
 
