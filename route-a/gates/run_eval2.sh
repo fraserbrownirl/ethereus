@@ -25,7 +25,11 @@ open("/tmp/tasks-all", "w").write("\n".join(allt)); open("/tmp/tasks-base", "w")
 print("all", len(allt), "base remaining", len(base), base)
 PY
 mapfile -t ALL < /tmp/tasks-all; mapfile -t BASE < /tmp/tasks-base
-if [ ${#BASE[@]} -gt 0 ]; then bash $G/serve_arm.sh base; bash $G/run_trials.sh base internet-nokey-base-capped 2 "${BASE[@]}"; fi
+if [ -z "${SKIP_BASE:-}" ] && [ ${#BASE[@]} -gt 0 ]; then
+  bash $G/serve_arm.sh base || { echo "SERVER_FAILED base"; exit 1; }
+  bash $G/run_trials.sh base internet-nokey-base-capped 2 "${BASE[@]}"
+fi
 echo "BASE_ARM_DONE $(date -u)"
-bash $G/serve_arm.sh rv2; bash $G/run_trials.sh rv2 internet-nokey-rv2 2 "${ALL[@]}"
+bash $G/serve_arm.sh rv2 || { echo "SERVER_FAILED rv2"; exit 1; }
+bash $G/run_trials.sh rv2 internet-nokey-rv2 2 "${ALL[@]}"
 echo EVAL2_DONE
