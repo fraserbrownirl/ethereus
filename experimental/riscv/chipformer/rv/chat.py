@@ -415,10 +415,11 @@ class RvChat:
 
     def generate(self, ids: list[int], machine: "ref.Machine", max_new: int = 4000,
                  max_chip: int = 60000, check_head: bool = False, verbose: bool = False,
-                 lock: "BR.Session | None" = None, prefix: dict | None = None) -> dict:
+                 lock: "BR.Session | None" = None, on_token=None,
+                 prefix: dict | None = None) -> dict:
         """Greedy decoding after the prompt ``ids`` with the parked ``machine`` loaded.
         ``lock`` (a Session on a copy of the machine): stop at the first token that differs from
-        the reference's."""
+        the reference's. ``on_token(id)`` is called with every generated model id as it comes."""
         x = torch.tensor([ids], device=self.dev)
         if prefix is not None:  # (a long shared prompt prefix, prefilled once: make_prefix)
             assert self.executor and not self.fast and ids[:len(prefix["ids"])] == prefix["ids"]
@@ -458,6 +459,8 @@ class RvChat:
         expect, lock_error = [], None
         while n_text < max_new and n_chip_tok < max_chip:
             gen.append(nxt)
+            if on_token is not None:
+                on_token(nxt)
             if lock is not None:  # check against the reference as we go
                 st = nxt - self.v0 if nxt >= self.v0 else BR.text_token(nxt)
                 if expect:
@@ -687,13 +690,18 @@ def main() -> None:
     lock = None
     if not remembered:  # (the reference does not know a store loaded from a file)
         if store:
-            from chipformer.rv import store as ST
+            from chipformer.rv import sealedstore as SEAL
 
-            lock = ST.StoreSession(chat.T, m2, chat.store_cfg)
+            lock = SEAL.SealedSession(chat.T, m2, chat.store_cfg)
         else:
             lock = BR.Session(chat.T, m2)
         lock.history(ids)
     r = chat.generate(ids, m, args.max_new, check_head=True, verbose=True, lock=lock)
+    if store:
+        from chipformer.rv import sealedstore as SEAL
+
+        for op, name in SEAL.audit_stream(chat.T, r["tokens"], chat.store_cfg):
+            print(f"[sealed-write detected (post-hoc, already in state): {op} {name}]")
     if args.memory:
         save_store_file(args.memory, chat.save_store())
     print(chat.text_of(r["tokens"]))
