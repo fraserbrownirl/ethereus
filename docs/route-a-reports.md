@@ -61,3 +61,16 @@ Per standing rule: appended before chat, then pushed.
 - **Base vLLM (task 10):** vLLM 0.32.0 installed but `Qwen3_5ForConditionalGeneration` not in vLLM registry → model load ValidationError. Per brief stop rule: after 3 attempts, use HF server. vLLM killed; HF serve path pending (gate 4 blocker deprioritizes baseline briefly). Disk 98G/220G (45%), merged eval (task 4) still queued after gates 3–4.
 - **Spend:** 58623317 **2.1h ($2.12) @ $1.01/h** since 05:50 UTC; $150 cap. q9-rv1 not used; q9-rv2 is current.
 
+## 2026-11-01 08:02 UTC — gate 4 BLOCKED (stop rule 3 fails), baseline HF fallback, 10m poll for 2h
+
+Per standing rule: committed before chat.
+
+- **Tasks 9 + gate 1:** ELF `b320d31b` from `c0853b4` (`.filebuf`) on `route-a` `76cb200`; box verified hash + `readelf -S .filebuf`. Gate 1 **PASS** on `q9-rv2` (KL 6.34e-4 / floor 3.77e-4 = 1.68×, 12/16 greedy) — STOP lifted, `q9-rv2` is current, `q9-rv1` retired.
+- **Gate 4 (task 8):** **BLOCKED — stop rule hit.** `cd /workspace && PYTHONPATH=ethereus/experimental/riscv:ethereus python3 -m chipformer.rv.chat dist/q9-rv2 --firmware …eth-bridge.elf --check --ask` (6 prompts: selector/keccak/u256/encode/create/balanceOf) — 3 attempts on prompt 1 (selector): fast (default) 90s→kill (1.5m CPU), --slow 90s→kill (0.9m), `python3 -u` 300s→kill (1:15 CPU), all after `Loading weights: 581/581` with no generation output (no `head mismatch`/`lock`/`replay`/`tokens/s`). Brief has --executor (not in chat.py; correct is --check/--slow). Gate 3 (execcheck+replay) already could-not-run (no records.jsonl). Filing: chip-exec deadlock on CUDA 13/torch 2.13 fallback (no causal_conv1d/fla).
+- **Base vLLM (task 10):** vLLM 0.32.0 installed but `Qwen3_5ForConditionalGeneration` not in registry → ValidationError on `vllm serve /workspace/models/Qwen3.5-9B --gpu-memory-utilization 0.45`. Per brief stop rule (3 attempts → HF server): vLLM killed, HF `transformers` serve script staged at `/tmp/hf-serve.py` (q9-rv2 35G + base 19G do not fit together on 85G — will serve base alone at 8000 after gate 4 is filed). Merged eval (task 4) still queued after gate 4.
+- **Polling:** Per your 08:01 instruction — polling `/Users/fraserbrown/Downloads/route-a-brief.md` every 10m for up to 2h (until ~10:00 UTC) for new dispatch. Poll loop PID 11438, log `/tmp/poll-brief.log` (sha12 973cbd4a5040, 99 lines, gate 1 PASSED state).
+
+Spend: 58623317 **08:02 UTC = 2.20h ($2.22) @ $1.01/h** since 05:50 UTC; $150 cap. Box at 98G/220G disk, gate 4 logs in `dist/q9-rv2/chat-1.log` + `/tmp/chat-1-300s.log`.
+
+Pushed `route-a` as report stream.
+
