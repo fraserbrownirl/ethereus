@@ -111,6 +111,8 @@ On-disk merged growth (dense): 9B 19.31 → 32.9 GB (+13.6 GB; 3.3 GB chip-layer
 | 3, replay of gate 4's records | PASS | 0 wrong predictions on all six | `dist/q9-rv2/gate4.log` |
 | 4, inside Qwen | PASS | 6/6, 0 head mismatches, no lock errors | `dist/q9-rv2/gate4.log`, `chat-<n>.log` |
 
+Gate 4 recheck after `logits_to_keep=1` (`dbaf773`): PASS, 6/6 clean, 0 wrong on replay, every text and chip token count equal to the run above. Source: `dist/q9-rv2/gate4-keep1/gate4.log`.
+
 The ratio's closeness to 1 is chance: per-prompt ratios run from 0.72 to 1.42 and no pair is equal. Earlier results below came from Vast 58623317, whose Python packages changed between gates when vLLM was installed, so they did not share one environment.
 
 **Gates 1–4 PASS on `dist/q9-rv2` — dispatcher-verified 08:58 UTC. `dist/q9-rv1` is retired.**
@@ -173,6 +175,8 @@ Smoke reading: `list` returns the right 16 files. The model often answers from m
 ---
 
 ## 3. Baseline eval (Task 3)
+
+**Base with the judged batch (2026-11-01): 6 of 30 tasks scored, the same 6 passes as below; the 7 tasks in the judged and rerun batch all scored 0.** Source: `results/internet-rest-base`. `voting-page` has one scored attempt; the other's judge reply did not parse. The 7 fork tasks are pending.
 
 **Current base result, partial (2026-11-01): Internet, stock Qwen3.5-9B through `serve.py`, thinking off, greedy: 12 of 46 scored trials passed, on 23 of the 24 tasks that need neither the grader key nor an RPC.** Source: `results/internet-nokey-base` and `results/internet-nokey-base-capped` on VM 58642243. Each task ran 2 attempts, which repeat exactly under greedy decoding, so this is 6 of 23 tasks. `signatures-permit2-witness-string` has no score: its first run looped on one `grep` for 189 calls and was stopped, then both limited attempts hit `AgentSetupTimeoutError`; to be rerun. 13 tasks wait on Fraser's RPC URL and Anthropic key. The table below is the earlier plan.
 
