@@ -35,6 +35,21 @@ SRC_TEXT = "model.language_model."
 DST = "model."
 
 
+def output_head(emb: torch.Tensor, base_head: torch.Tensor | None, v0: int,
+                d0: int) -> torch.Tensor | None:
+    """The merged ``lm_head`` when the base's head is untied from its embedding, else None.
+
+    Qwen3.5-4B is tied; 9B is not (``tie_word_embeddings: false``), and decoding it with its
+    embedding gives noise. Only Qwen's rows on Qwen's dims differ from the tied head: the chip
+    columns (output code, tau) and the RV32 tokens' rows stay the embedding's.
+    """
+    if base_head is None or torch.equal(base_head, emb[:v0, :d0]):
+        return None
+    head = emb.clone()
+    head[:v0, :d0] = base_head
+    return head
+
+
 def chip_token_names() -> list[str]:
     names = []
     for t in range(S.VOCAB):
@@ -144,10 +159,13 @@ def build_merged(src, dst, mute_qwen: bool = True, hidden: int | None = None,
     # Qwen's weights, widened and renamed one tensor at a time (keeps peak memory low)
     scale = (d0 / hidden) ** 0.5
     sd = {}
-    base_emb = None
+    base_emb = base_head = None
     for f in sorted(src.glob("*.safetensors")):
         with safe_open(f, "pt") as fh:
             for k in fh.keys():  # noqa: SIM118
+                if k == "lm_head.weight":
+                    base_head = fh.get_tensor(k)
+                    continue
                 if not k.startswith(SRC_TEXT):
                     continue  # vision tower, mtp
                 w = fh.get_tensor(k)
@@ -186,6 +204,11 @@ def build_merged(src, dst, mute_qwen: bool = True, hidden: int | None = None,
     del chip
     check_bf16("embedding", emb[:, d0:].float()[: min(vocab, 300000)])
     sd[DST + "embed_tokens.weight"] = emb
+    head = output_head(emb, base_head, v0, d0)
+    if head is not None:
+        sd["lm_head.weight"] = head
+        tc["tie_word_embeddings"] = False
+    del base_head
 
     code = [next(iter(e.terms)) for e in c.code]
     tau = next(iter(c.tau.terms))
