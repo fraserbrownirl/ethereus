@@ -7,6 +7,7 @@ Single list for the core repo and Route A; the Cursor agent and Muse are retired
 | Fork batch: 7 mainnet-fork tasks, Internet, both arms | queued | Waits for the judged batch | | | |
 | Judged batch: 6 judged tasks plus witness-string rerun, Internet, both arms | running | | 2026-11-01 13:28 | | |
 | Ethereus test, before the spill fix, three arms | queued | Needs the GPU after the eval batches | | | |
+| Rerun three-call `serve.py` test on the eval VM, then Fraser can destroy 58623317 | queued | Runs automatically after the Ethereus test's before run | | | |
 | `eth_in` firmware change, its gate 4, the spec's spill test | queued | ELF frozen until both eval configurations finish | | | |
 | Ethereus test, after the spill fix | queued | Needs the spill fix | | | |
 | GPU test of `serve.py` store support | queued | Needs the GPU after the eval batches | | | |
