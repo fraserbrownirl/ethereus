@@ -21,6 +21,7 @@ Usage (from experimental/riscv):
 import argparse
 import random
 import re
+import sys
 import time
 from pathlib import Path
 
@@ -55,23 +56,23 @@ def _poke(m: ref.Machine, base: int, b: bytes):
         m.ram[w] = m.ram[w] & ~(0xFF << 8 * (a & 3)) | x << 8 * (a & 3)
 
 
-def machine(cmd: str, path=ELF) -> ref.Machine:
+def machine(cmd: str, path=None) -> ref.Machine:
     """The non-bridge firmware's snapshot with the cmd line in eth_in (cf calc.py)."""
-    m = ref.Machine.from_program(elfmod.program(path))
+    m = ref.Machine.from_program(elfmod.program(path or ELF))
     b = cmd.encode() + b"\0"
     assert len(b) <= ETH_IN_SIZE, f"cmd too long for eth_in: {len(b)}"
     _poke(m, ETH_IN, b)
     return m
 
 
-def run(cmd: str, path=ELF) -> tuple[str, list[int]]:
+def run(cmd: str, path=None) -> tuple[str, list[int]]:
     m = machine(cmd, path)
     toks = m.run(3 * 10**6)
     assert m.halted and m.fault is None, (cmd, m.fault, m.out)
     return m.out.decode(), toks
 
 
-def machine_with_files(cmd: str, files: dict[str, str], path=ELF) -> ref.Machine:
+def machine_with_files(cmd: str, files: dict[str, str], path=None) -> ref.Machine:
     """machine() plus bridge-resolved @file args poked into file_buf.
 
     files maps name -> hex content; written as name\\0hex\\0 pairs plus a
@@ -89,7 +90,7 @@ def machine_with_files(cmd: str, files: dict[str, str], path=ELF) -> ref.Machine
     return m
 
 
-def run_with_files(cmd: str, files: dict[str, str], path=ELF) -> tuple[str, list[int]]:
+def run_with_files(cmd: str, files: dict[str, str], path=None) -> tuple[str, list[int]]:
     m = machine_with_files(cmd, files, path)
     toks = m.run(3 * 10**6)
     assert m.halted and m.fault is None, (cmd, m.fault, m.out)
@@ -1496,7 +1497,11 @@ def main():
     ap.add_argument("--only", type=str, default="keccak,u256", help="comma-separated ops from keccak,u256,selector,encode,decode,create,create2,run")
     ap.add_argument("--expr", type=str, default=None, help="single cmd, e.g. 'keccak 0x6161' or 'u256 2**255 - 1'")
     ap.add_argument("--cases-per-op", type=int, default=None)
+    ap.add_argument("--elf", type=str, default=None, help="firmware image to test instead of tests/data/rv/eth.elf")
     args = ap.parse_args()
+    if args.elf:
+        global ELF
+        ELF = Path(args.elf)
 
     # --expr: single shot with stats (sized, but run regardless of the window)
     if args.expr:
@@ -1558,6 +1563,7 @@ def main():
         print(f"GATE 1 FAIL: {bad}/{total_expected} mismatches")
         for cmd, got, want in bad_samples[:5]:
             print(f"  e.g. {cmd!r} got {got} want {want}")
+        sys.exit(1)
 
 if __name__ == "__main__":
     main()

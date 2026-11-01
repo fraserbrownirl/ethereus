@@ -334,3 +334,11 @@ for byte. The sizes below predate this image: it has `.text 111,652 / .rodata 23
 `eth-bridge.elf`: .text 102,404 / 262,144 · .rodata 20,864 / 131,072 ·
 .data 20 · .bss 1,292.
 (.rodata grew ~15 KB with the 225-entry selector DROM table.)
+
+## Oracle independence and malformed input
+
+One flipped bit in a keccak round constant, built from a scratch copy, must fail gate 1 while the unflipped build passes. `scripts/oracle_independence.sh` does this; log `docs/logs/oracle-independence.log`. Over 40 cases per command the flipped build fails keccak 40, create 37 and selector 15. The cases it does not fail do not exercise the hash: 25 selectors come from the precomputed table, and 3 creates are bad-nonce errors. The table is therefore checked only by this gate's comparison with the Python oracle.
+
+`tests/test_rv_errors.py` sends malformed input to every command, log `docs/logs/malformed-input.log`. No input crashes, hangs or prints non-text. Six forms answer instead of giving an error, and the oracle agrees with each: bare `keccak`, a `u256` literal above 2**256 which wraps silently, `selector` without a full signature (three forms), and a short `bytes32` in `encode`. They are strict expected failures until the next firmware change; the ELF stays frozen through the evals.
+
+`chipformer/rv/eth.py` now exits 1 on a mismatch and takes `--elf`. Before this it exited 0 on `GATE 1 FAIL`, so read the printed verdict on any earlier log.

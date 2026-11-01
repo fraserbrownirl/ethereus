@@ -1,0 +1,7 @@
+control keccak: GATE 1 PASS (ref machine == Python on all cases)
+flipped keccak: GATE 1 FAIL: 40/40 mismatches
+control selector: GATE 1 PASS (ref machine == Python on all cases)
+flipped selector: GATE 1 FAIL: 15/40 mismatches
+control create: GATE 1 PASS (ref machine == Python on all cases)
+flipped create: GATE 1 FAIL: 37/40 mismatches
+ORACLE PASS
