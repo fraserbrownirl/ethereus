@@ -43,3 +43,6 @@ One line per tick: time (UTC), what changed. Spend is omitted because Fraser mon
 - 2026-11-01 17:40 Circuit judged batch: 0 of 7 tasks, 0 of 14 trials, no errors (`results/internet-rest-rv2`). Totals: base 6 of 30, circuit 6 of 30, same passes. Fork batch started on base. Judge spend read as $5.45, which may count duplicates (`/tmp/j.py`).
 - 2026-11-01 17:40 Correction to my own read: the one circuit run in the rv2 traces is my server check at 12:08:39, not a trial. The circuit has run in no eval trial.
 - 2026-11-01 17:40 Spill branch gate 1: 10,910 cases, 0 mismatches, 6 by-design rejects asserted (`docs/logs/gate1-spill.log` on `spill-eth-in`). Full suite 306 passed, 2 failed, both stale tests; those two files then 93 of 93.
+- 2026-11-01 17:55 Over-window gate on `spill-eth-in` failed, 12 of 14,000: 5 were a real bug, `encode f(int256) 2**255` answered with -2**255, in the frozen ELF too but over the window so unreachable there; 7 were my parser change altering a message. Both fixed on the branch; full rerun running.
+- 2026-11-01 17:55 Fraser: boundary slice in gate 1. 320 cases, every intN and uintN at min, max, max+1, min-1 and every bytesN at N and N+1 bytes. Out of range asserted as errors, in range compared with `eth_abi`. Branch 0 bad; frozen ELF 1 bad, the int256 case, so the slice catches it.
+
