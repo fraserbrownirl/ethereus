@@ -203,3 +203,8 @@ def test_over_window_call_is_left_to_the_firmware_while_spill_is_off():
         w(i)  # no OverWindow: the circuit runs the call and answers error (too long)
     assert serve.SPILL_ON_GPU is False
 
+
+def test_trailing_end_tokens_never_reach_the_answer():
+    for end in ("<|im_end|>", "<|im_end|>\n<|endoftext|>", "<|endoftext|>\n"):
+        assert serve.to_message("no" + end)[0]["content"] == "no"
+

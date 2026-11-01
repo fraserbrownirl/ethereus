@@ -248,8 +248,7 @@ class BaseEngine:
                                            add_generation_prompt=True, enable_thinking=False,
                                            return_dict=True)  # as RvChat.prompt_ids: same prompt
         ids = list(enc["input_ids"])
-        eos = self.model.generation_config.eos_token_id
-        eos = eos if isinstance(eos, list) else [] if eos is None else [eos]
+        eos = [248046, 248044]  # RvChat.eos: both arms stop on the same tokens
         with self.lock, self.torch.no_grad():
             out = self.model.generate(self.torch.tensor([ids], device="cuda"), do_sample=False,
                                       max_new_tokens=max_new, eos_token_id=[*eos, self.tcc],
@@ -283,7 +282,7 @@ def to_message(text: str, client_call: dict | None = None,
             "name": "eth", "arguments": json.dumps({"cmd": spill.parse_cmd(m.group(1)) or ""})}})
         tools.append({"role": "tool", "tool_call_id": cid, "content": m.group(2)})
     content = text if keep_ours else _TURN.sub("", text)
-    content = re.sub(r"<\|im_end\|>\s*$", "", content).strip()
+    content = re.sub(r"(?:\s*<\|(?:im_end|endoftext)\|>)+\s*$", "", content).strip()
     if keep_ours:
         calls = []
     if client_call is not None:
