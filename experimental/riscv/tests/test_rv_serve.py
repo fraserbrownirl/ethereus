@@ -16,16 +16,21 @@ TEXT = ("<tool_call>\n<function=eth>\n<parameter=cmd>\nselector transfer(address
 
 
 class Fake:
+    client_call = None
+
     def __init__(self, text=TEXT, slow=False):
         self.text, self.slow, self.seen = text, slow, []
 
-    def run(self, messages, max_new, deadline=None):
+    def run(self, messages, max_new, deadline=None, client_tools=()):
         self.seen.append(messages)
+        self.client_tools = client_tools
         if self.slow:
             raise serve.Deadline
         return serve.Turn(segments=[{"prompt_ids": [1], "gen_ids": [2], "owner_mask": [True],
                                      "files": {}}],
-                          text=self.text, prompt_tokens=1, completion_tokens=1)
+                          text=self.text, prompt_tokens=1, completion_tokens=1,
+                          client_call=self.client_call,
+                          finish_reason="tool_calls" if self.client_call else "stop")
 
 
 @pytest.fixture
@@ -150,3 +155,40 @@ def test_replay_cut_keeps_a_failure_visible():
 
     r = serve.replay_segment(run, _seg([5, TCC, 7]), TCC)
     assert not r["ok"] and r["truncated_run"]
+
+
+BASH = {"type": "function", "function": {"name": "bash", "parameters": {"type": "object",
+        "properties": {"command": {"type": "string"}, "timeout": {"type": "integer"}}}}}
+
+
+def test_parse_call_decodes_per_schema():
+    text = "\n<function=bash>\n<parameter=command>\nls -l\n</parameter>\n<parameter=timeout>\n5\n</parameter>\n</function>\n"
+    assert serve.parse_call(text, [BASH]) == {"name": "bash", "arguments": {"command": "ls -l", "timeout": 5}}
+    assert serve.parse_call("no call") is None
+
+
+def test_client_tool_call_goes_back_and_ours_stay_in_the_content(tmp_path):
+    fake = Fake(text=TEXT.replace("<|im_end|>", ""))
+    fake.client_call = {"name": "bash", "arguments": {"command": "ls"}}
+    c = TestClient(serve.create_app(fake, ["k1"], tmp_path))
+    r = c.post("/v1/chat/completions", json={**BODY, "tools": [BASH]}, headers=A).json()
+    choice = r["choices"][0]
+    assert fake.client_tools == [BASH] and choice["finish_reason"] == "tool_calls"
+    assert [x["function"]["name"] for x in choice["message"]["tool_calls"]] == ["bash"]
+    assert json.loads(choice["message"]["tool_calls"][0]["function"]["arguments"]) == {"command": "ls"}
+    assert "<function=eth>" in choice["message"]["content"]  # history for the next request
+    assert r["ethereus"]["tool_messages"][0]["content"] == "0xa9059cbb"
+
+
+def test_stream_is_refused_unless_buffered_then_is_valid_sse(tmp_path):
+    body = {**BODY, "stream": True}
+    off = TestClient(serve.create_app(Fake(), ["k1"], tmp_path / "a"))
+    assert off.post("/v1/chat/completions", json=body, headers=A).status_code == 422
+    on = TestClient(serve.create_app(Fake(), ["k1"], tmp_path / "b", buffered_stream=True))
+    r = on.post("/v1/chat/completions", json=body, headers=A)
+    assert r.status_code == 200 and r.headers["content-type"].startswith("text/event-stream")
+    frames = [ln[6:] for ln in r.text.splitlines() if ln.startswith("data: ")]
+    assert frames[-1] == "[DONE]"
+    first, last = json.loads(frames[0]), json.loads(frames[-2])
+    assert first["choices"][0]["delta"]["content"] == "The selector is 0xa9059cbb."
+    assert last["choices"][0]["finish_reason"] == "stop" and last["usage"]["total_tokens"] == 2

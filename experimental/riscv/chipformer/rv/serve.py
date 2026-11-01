@@ -1,11 +1,18 @@
 """OpenAI-compatible API over RvChat (docs/api-spec-clean.md), seeded from route-a/shim/server.py.
 
 Standalone: keys, consent, traces and captures live on local disk. The Modal wrapper, Postgres, R2,
-per-key files and signup are the API repo's and are not here. No streaming.
+per-key files and signup are the API repo's and are not here.
+
+Eval options (Fraser, 2026-11-01), recorded in docs/ethevals-submission.md. Client tools are offered
+beside ours: our calls run in the circuit, a client tool call stops generation at its </tool_call>
+and goes back as OpenAI ``tool_calls``. ``buffered_stream`` answers ``stream: true`` as SSE after
+generation ends, with keepalive comments meanwhile, because OpenCode only speaks streaming; tokens
+are not streamed.
 
     ETHEREUS_KEYS=key1,key2 uvicorn --factory chipformer.rv.serve:from_env --port 8001
 
-Env: MODEL, FIRMWARE, SNAPSHOT (optional), ETHEREUS_DATA (default ./serve-data), CAPTURE_HMAC_KEY.
+Env: MODEL, FIRMWARE, SNAPSHOT (optional), ETHEREUS_DATA (default ./serve-data), CAPTURE_HMAC_KEY,
+ETHEREUS_SYNC_SECONDS, ETHEREUS_BUFFERED_STREAM=1, ETHEREUS_BASE=1 (stock checkpoint, no circuit).
 """
 
 import hashlib
@@ -44,12 +51,39 @@ class Deadline(Exception):
     """Generation passed the sync limit."""
 
 
+class ClientCall(Exception):
+    """The model closed a call to a tool the client runs, not the circuit."""
+
+
+_FN = re.compile(r"<function=([^>\n]+)>")
+_PARAM = re.compile(r"<parameter=([^>\n]+)>\n?(.*?)\n?</parameter>", re.DOTALL)
+
+
+def parse_call(text: str, schemas: list[dict] = ()) -> dict | None:
+    """Qwen's call text -> {name, arguments}. Non-string parameters are decoded per the schema."""
+    m = _FN.search(text)
+    if m is None:
+        return None
+    name, args = m.group(1).strip(), {}
+    props = next((t["function"].get("parameters", {}).get("properties", {}) for t in schemas
+                  if t.get("function", {}).get("name") == name), {})
+    for k, v in _PARAM.findall(text):
+        args[k] = v
+        if props.get(k, {}).get("type", "string") != "string":
+            try:
+                args[k] = json.loads(v)
+            except ValueError:
+                pass
+    return {"name": name, "arguments": args}
+
+
 class Watch:
     """generate's on_token: keeps the ids, and stops before an over-window call or past a deadline.
     Called before the token is stepped, so stopping at </tool_call> means the circuit never ran."""
 
-    def __init__(self, T: BR.Text, deadline: float | None = None) -> None:
-        self.T, self.deadline = T, deadline
+    def __init__(self, T: BR.Text, deadline: float | None = None, ours: set[str] | None = None,
+                 decode=None) -> None:
+        self.T, self.deadline, self.ours, self.decode = T, deadline, ours, decode
         self.gen: list[int] = []
         self.start: int | None = None
 
@@ -60,6 +94,10 @@ class Watch:
         if t == self.T.TCO:
             self.start = len(self.gen)
         elif t == self.T.TCC and self.start is not None:
+            if self.ours is not None:  # client tools were offered
+                m = _FN.search(self.decode(self.gen[self.start:-1]))
+                if m is None or m.group(1).strip() not in self.ours:
+                    raise ClientCall
             if len(self.gen) - 1 - self.start > spill.WINDOW:
                 raise OverWindow
             self.start = None
@@ -74,6 +112,7 @@ class Turn:
     completion_tokens: int = 0
     finish_reason: str = "stop"
     lock_error: object = None
+    client_call: dict | None = None
 
 
 class Engine:
@@ -92,25 +131,38 @@ class Engine:
     def _visible(self, ids: list[int]) -> list[int]:
         return [i for i in ids if i < self.chat.v0]
 
-    def run(self, messages: list[dict], max_new: int, deadline: float | None = None) -> Turn:
+    def run(self, messages: list[dict], max_new: int, deadline: float | None = None,
+            client_tools: list[dict] = ()) -> Turn:
         with self.lock:
-            return self._run(messages, max_new, deadline)
+            return self._run(messages, max_new, deadline, list(client_tools))
 
-    def _run(self, messages, max_new, deadline) -> Turn:
+    def _run(self, messages, max_new, deadline, client_tools) -> Turn:
         chat, T = self.chat, self.chat.T
-        ids = chat.prompt_ids(messages, (ETH_TOOL,))
+        decode = lambda g: T.tok.decode(self._visible(g), skip_special_tokens=False)
+        ours = {"eth"} if client_tools else None
+        client_tools = [t for t in client_tools if t.get("function", {}).get("name") != "eth"]
+        ids = chat.prompt_ids(messages, (ETH_TOOL, *client_tools))
         turn = Turn(prompt_tokens=len(ids))
         n0, files, must_close, left = len(ids), {}, False, max_new
         while True:
             fw = spill.firmware_with_files(self.firmware, files)
             lock = BR.Session(T, spill.parked(fw))
             lock.history(ids)
-            watch = Watch(T, deadline)
+            watch = Watch(T, deadline, ours, decode)
             seg = {"prompt_ids": ids, "files": files}
             turn.segments.append(seg)
             try:
                 r = chat.generate(ids, spill.parked(fw), left, max_chip=MAX_CHIP, lock=lock,
                                   on_token=watch)
+            except ClientCall:
+                seg["gen_ids"] = watch.gen[:-1]  # the circuit never saw this </tool_call>
+                seg["owner_mask"] = lock.own[len(ids):]
+                turn.client_call = parse_call(decode(watch.gen[watch.start:-1]), client_tools)
+                turn.finish_reason = "tool_calls"
+                visible = ids[n0:] + self._visible(watch.gen[:watch.start - 1])  # before <tool_call>
+                turn.text = T.tok.decode(visible, skip_special_tokens=False)
+                turn.completion_tokens = len(visible) + 1
+                return turn
             except OverWindow:
                 seg["gen_ids"] = watch.gen[:-1]  # up to, not including, the </tool_call>
                 seg["owner_mask"] = lock.own[len(ids):]
@@ -162,20 +214,92 @@ def replay_segment(run, seg: dict, tcc: int) -> dict:
     return {**run(gen[:cut]), "truncated_run": True, "checked_tokens": cut}
 
 
-def to_message(text: str) -> tuple[dict, list[dict]]:
-    """Assistant text -> (OpenAI message with tool_calls, the tool messages the circuit answered)."""
+class BaseEngine:
+    """The stock checkpoint behind the same API and the same parsing, so the two arms differ only
+    in the model. Offers the client's tools only: base Qwen has no circuit."""
+
+    def __init__(self, model: str) -> None:
+        import torch
+        from transformers import AutoTokenizer, Qwen3_5ForCausalLM
+
+        self.torch = torch
+        self.tok = AutoTokenizer.from_pretrained(model)
+        self.model = Qwen3_5ForCausalLM.from_pretrained(model, dtype=torch.bfloat16).to("cuda").eval()
+        self.tcc = self.tok.convert_tokens_to_ids("</tool_call>")
+        self.tco = self.tok.convert_tokens_to_ids("<tool_call>")
+        self.lock = threading.Lock()
+
+    def run(self, messages: list[dict], max_new: int, deadline: float | None = None,
+            client_tools: list[dict] = ()) -> Turn:
+        from transformers import StoppingCriteria, StoppingCriteriaList
+
+        class _Stop(StoppingCriteria):
+            def __call__(self, *a, **k):
+                return deadline is not None and time.time() > deadline
+
+        enc = self.tok.apply_chat_template(messages, tools=list(client_tools) or None,
+                                           add_generation_prompt=True, return_dict=True)
+        ids = list(enc["input_ids"])
+        eos = list(self.model.generation_config.eos_token_id or [])
+        eos = eos if isinstance(eos, list) else [eos]
+        with self.lock, self.torch.no_grad():
+            out = self.model.generate(self.torch.tensor([ids], device="cuda"), do_sample=False,
+                                      max_new_tokens=max_new, eos_token_id=[*eos, self.tcc],
+                                      stopping_criteria=StoppingCriteriaList([_Stop()]))
+        if deadline is not None and time.time() > deadline:
+            raise Deadline
+        gen = out[0, len(ids):].tolist()
+        turn = Turn(prompt_tokens=len(ids), completion_tokens=len(gen),
+                    segments=[{"prompt_ids": ids, "gen_ids": gen, "owner_mask": [], "files": {}}])
+        if gen and gen[-1] == self.tcc and self.tco in gen:
+            at = len(gen) - 1 - gen[::-1].index(self.tco)
+            turn.client_call = parse_call(self.tok.decode(gen[at + 1:-1]), list(client_tools))
+            turn.text = self.tok.decode(gen[:at], skip_special_tokens=False)
+            turn.finish_reason = "tool_calls"
+        else:
+            turn.text = self.tok.decode(gen, skip_special_tokens=False)
+            turn.finish_reason = "length" if len(gen) >= max_new else "stop"
+        return turn
+
+
+def to_message(text: str, client_call: dict | None = None,
+               keep_ours: bool = False) -> tuple[dict, list[dict]]:
+    """Assistant text -> (OpenAI message with tool_calls, the tool messages the circuit answered).
+
+    ``keep_ours``: client tools were offered, so the client would try to run any tool_calls it
+    sees, and it sends this content back as history. Our calls stay in the content as written."""
     calls, tools = [], []
     for i, m in enumerate(_TURN.finditer(text)):
         cid = f"call_{i}"
         calls.append({"id": cid, "type": "function", "function": {
             "name": "eth", "arguments": json.dumps({"cmd": spill.parse_cmd(m.group(1)) or ""})}})
         tools.append({"role": "tool", "tool_call_id": cid, "content": m.group(2)})
-    content = _TURN.sub("", text)
+    content = text if keep_ours else _TURN.sub("", text)
     content = re.sub(r"<\|im_end\|>\s*$", "", content).strip()
+    if keep_ours:
+        calls = []
+    if client_call is not None:
+        calls.append({"id": f"call_{uuid.uuid4().hex[:12]}", "type": "function", "function": {
+            "name": client_call["name"], "arguments": json.dumps(client_call["arguments"])}})
     msg = {"role": "assistant", "content": content}
     if calls:
         msg["tool_calls"] = calls
     return msg, tools
+
+
+def sse_chunks(body: dict) -> list[str]:
+    """A finished completion as OpenAI stream chunks."""
+    choice = body["choices"][0]
+    msg = choice["message"]
+    base = {k: body[k] for k in ("id", "created", "model")} | {"object": "chat.completion.chunk"}
+    delta: dict = {"role": "assistant", "content": msg["content"]}
+    if msg.get("tool_calls"):
+        delta["tool_calls"] = [{"index": i, **c} for i, c in enumerate(msg["tool_calls"])]
+    frames = [{**base, "choices": [{"index": 0, "delta": delta, "finish_reason": None}]},
+              {**base, "choices": [{"index": 0, "delta": {},
+                                    "finish_reason": choice["finish_reason"]}],
+               "usage": body["usage"], "ethereus": body["ethereus"]}]
+    return [f"data: {json.dumps(f)}\n\n" for f in frames] + ["data: [DONE]\n\n"]
 
 
 def _template_messages(messages: list[dict]) -> list[dict]:
@@ -199,9 +323,12 @@ def _sha256(path) -> str | None:
 
 def create_app(engine, keys: list[str], data_dir, firmware=None, snapshot=None,
                model_id: str = "ethereus", core_commit: str | None = None,
-               hmac_key: bytes = b"", sync_seconds: float = SYNC_SECONDS):
+               hmac_key: bytes = b"", sync_seconds: float = SYNC_SECONDS,
+               buffered_stream: bool = False):
+    import asyncio
+
     from fastapi import FastAPI, Request
-    from fastapi.responses import JSONResponse, Response
+    from fastapi.responses import JSONResponse, Response, StreamingResponse
 
     data = Path(data_dir)
     (data / "traces").mkdir(parents=True, exist_ok=True)
@@ -241,7 +368,7 @@ def create_app(engine, keys: list[str], data_dir, firmware=None, snapshot=None,
         return {"X-RateLimit-Remaining-Minute": str(RATE_MINUTE - minute - 1),
                 "X-RateLimit-Remaining-Day": str(RATE_DAY - len(seen))}
 
-    def finish(turn: Turn, kid: str, model: str) -> dict:
+    def finish(turn: Turn, kid: str, model: str, client_tools: list = ()) -> dict:
         tid = uuid.uuid4().hex
         trace = {"trace_id": tid, "key_id": kid, "timestamp": time.time(),
                  "prompt_ids": turn.segments[0]["prompt_ids"],
@@ -250,7 +377,7 @@ def create_app(engine, keys: list[str], data_dir, firmware=None, snapshot=None,
                  "firmware_sha256": version["firmware_sha256"],
                  "snapshot_sha256": version["snapshot_sha256"]}
         (data / "traces" / f"{tid}.json").write_text(json.dumps(trace))
-        msg, tools = to_message(turn.text)
+        msg, tools = to_message(turn.text, turn.client_call, keep_ours=bool(client_tools))
         level = consent.get(kid, "off")
         if level != "off":
             khash = hmac.new(hmac_key, kid.encode(), hashlib.sha256).hexdigest()
@@ -287,23 +414,42 @@ def create_app(engine, keys: list[str], data_dir, firmware=None, snapshot=None,
             max_new = int(body.get("max_tokens") or MAX_TOKENS_DEFAULT)
         except (ValueError, KeyError, TypeError) as e:
             raise ApiError(422, "bad_request", f"bad request: {e}") from e
-        if body.get("stream"):
+        stream = bool(body.get("stream"))
+        if stream and not buffered_stream:
             raise ApiError(422, "bad_request", "streaming is not supported")
+        client_tools = [t for t in body.get("tools") or [] if t.get("type") == "function"]
         if not 1 <= max_new <= MAX_TOKENS_MAX:
             raise ApiError(422, "bad_request", f"max_tokens must be 1..{MAX_TOKENS_MAX}")
         model = body.get("model", model_id)
         if body.get("mode", "sync") == "async":
             jid = uuid.uuid4().hex
-            jobs[jid] = (kid, model, pool.submit(engine.run, messages, max_new))
+            jobs[jid] = (kid, model, client_tools,
+                         pool.submit(engine.run, messages, max_new, None, client_tools))
             return JSONResponse({"id": jid, "status": "queued"}, 202, headers)
-        fut = pool.submit(engine.run, messages, max_new, time.time() + sync_seconds)
-        import asyncio
+        fut = pool.submit(engine.run, messages, max_new, time.time() + sync_seconds, client_tools)
+        if stream:
+            async def frames():
+                done = asyncio.wrap_future(fut)
+                while True:
+                    finished, _ = await asyncio.wait({done}, timeout=15)
+                    if finished:
+                        break
+                    yield ": keepalive\n\n"
+                try:
+                    chunks = sse_chunks(finish(done.result(), kid, model, client_tools))
+                except Deadline:
+                    chunks = ['data: {"error": {"code": "use_async", "message": "over the limit"}}\n\n']
+                except ApiError as e:
+                    chunks = [f"data: {json.dumps({'error': {'code': e.code, 'message': e.message}})}\n\n"]
+                for c in chunks:
+                    yield c
 
+            return StreamingResponse(frames(), media_type="text/event-stream", headers=headers)
         try:
             turn = await asyncio.wrap_future(fut)
         except Deadline as e:
             raise ApiError(408, "use_async", f"over {sync_seconds:.0f} s; use mode=async") from e
-        return JSONResponse(finish(turn, kid, model), 200, headers)
+        return JSONResponse(finish(turn, kid, model, client_tools), 200, headers)
 
     @app.get("/v1/jobs/{jid}")
     def job(jid: str, req: Request):
@@ -312,10 +458,10 @@ def create_app(engine, keys: list[str], data_dir, firmware=None, snapshot=None,
         if j is None or j[0] != kid:
             raise ApiError(404, "not_found", "no such job")
         try:
-            turn = j[2].result(timeout=0)
+            turn = j[3].result(timeout=0)
         except FutureTimeout:
             return JSONResponse({"status": "running"}, 202)
-        return finish(turn, kid, j[1])
+        return finish(turn, kid, j[1], j[2])
 
     @app.get("/v1/traces/{tid}")
     def get_trace(tid: str, req: Request):
@@ -369,10 +515,13 @@ def create_app(engine, keys: list[str], data_dir, firmware=None, snapshot=None,
 
 
 def from_env():
-    firmware = os.environ["FIRMWARE"]
+    firmware = os.environ.get("FIRMWARE")
     keys = [k for k in os.environ.get("ETHEREUS_KEYS", "").split(",") if k]
-    return create_app(Engine(os.environ["MODEL"], firmware, executor=True), keys,
-                      os.environ.get("ETHEREUS_DATA", "serve-data"), firmware,
+    engine = (BaseEngine(os.environ["MODEL"]) if os.environ.get("ETHEREUS_BASE")
+              else Engine(os.environ["MODEL"], firmware, executor=True))
+    return create_app(engine, keys, os.environ.get("ETHEREUS_DATA", "serve-data"), firmware,
                       os.environ.get("SNAPSHOT"), os.environ.get("MODEL_ID", "ethereus"),
                       os.environ.get("CORE_COMMIT"),
-                      os.environ.get("CAPTURE_HMAC_KEY", "").encode())
+                      os.environ.get("CAPTURE_HMAC_KEY", "").encode(),
+                      float(os.environ.get("ETHEREUS_SYNC_SECONDS", SYNC_SECONDS)),
+                      bool(os.environ.get("ETHEREUS_BUFFERED_STREAM")))
