@@ -36,7 +36,7 @@ from chipformer.rv import store as ST  # noqa: E402
 # merge (route-A) that main does not have yet. snap/verify import them lazily
 # and fail clearly without the merge; check runs on main.
 
-CALC = RV / "tests/data/rv/calc-bridge.elf"
+FIRMWARE = RV / "tests/data/rv/eth-bridge.elf"
 CFGS = {
     "tiny": ST.Config(slot_bits=4, n_chunks=8, n_names=4, hash_bits=1),
     "small": ST.Config(slot_bits=4, n_chunks=16, n_names=8, hash_bits=2),
@@ -45,7 +45,7 @@ CFGS = {
 
 
 def fresh_machine():
-    m = ref.Machine.from_program(elf.program(str(CALC)))
+    m = ref.Machine.from_program(elf.program(str(FIRMWARE)))
     BR.park(m)
     return m
 
@@ -134,14 +134,14 @@ def snap_boot(T, man, cfg, out):
                        for r, row in st.items()})
         snap[name] = vs
     save_store_file(out, snap)
-    fw = CALC.read_bytes()
+    fw = FIRMWARE.read_bytes()
     digest = hashlib.sha256(Path(out).read_bytes()).hexdigest()
     manifest = {
         "snapshot": Path(out).name,
         "sha256": digest,
         "files": [f["name"] for f in man["files"]],
         "token_count": man["total_tokens"],
-        "firmware": CALC.name,
+        "firmware": FIRMWARE.name,
         "firmware_sha256": hashlib.sha256(fw).hexdigest(),
         "store_cfg": {"slot_bits": cfg.slot_bits, "n_chunks": cfg.n_chunks,
                       "n_names": cfg.n_names, "hash_bits": cfg.hash_bits},

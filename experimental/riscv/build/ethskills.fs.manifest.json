@@ -20,8 +20,8 @@
     "es/vaults.md"
   ],
   "token_count": 39539,
-  "firmware": "calc-bridge.elf",
-  "firmware_sha256": "b643ad61291a947fa6c7498de9170b1d4da062dc1f34810feba9c4eebdec862d",
+  "firmware": "eth-bridge.elf",
+  "firmware_sha256": "8a49492d9d27c81b577efd1f4b5bb95fbb46f2d2fa2364f7e15792d25cd736d9",
   "store_cfg": {
     "slot_bits": 10,
     "n_chunks": 512,
