@@ -3,6 +3,10 @@
 set -euo pipefail
 W=/workspace; ARM=$1
 pkill -f "chipformer.rv.serve:from_env" 2>/dev/null || true; sleep 3
+if [ "$ARM" = rv2 ] && [ ! -f $W/gate4-keep1.ok ]; then
+  # logits_to_keep=1 changed the driver: gate 4 must reproduce the pinned run's token counts first.
+  bash $W/ethereus/route-a/gates/gate4_recheck.sh || { echo "gate 4 recheck failed, not starting rv2"; exit 1; }
+fi
 umask 077; [ -f $W/serve.token ] || head -c 24 /dev/urandom | od -An -tx1 | tr -d ' \n' > $W/serve.token
 export ETHEREUS_KEYS=$(< $W/serve.token) ETHEREUS_BUFFERED_STREAM=1 ETHEREUS_SYNC_SECONDS=36000 ETHEREUS_RATE_MINUTE=100000 ETHEREUS_RATE_DAY=100000000
 export PYTORCH_ALLOC_CONF=expandable_segments:True

@@ -328,7 +328,7 @@ class RvChat:
         ``lock`` (a Session on a copy of the machine): stop at the first token that differs from
         the reference's. ``on_token(id)`` is called with every generated model id as it comes."""
         x = torch.tensor([ids], device=self.dev)
-        out = self.model(input_ids=x, use_cache=True)
+        out = self.model(input_ids=x, use_cache=True, logits_to_keep=1)  # only the last row is read
         cache = out.past_key_values  # (fast: Qwen's layers only)
         core.snapshot(self.c, machine)
         if self.executor:
