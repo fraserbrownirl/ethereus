@@ -6,6 +6,7 @@
 Sources: docs/dispatcher-tasks.md, docs/dispatcher-log.md, the eval VM over ssh, the Vast API.
 Nothing new is measured. No secret or host address goes on the page.
 """
+import hashlib
 import html
 import json
 import os
@@ -23,7 +24,9 @@ SSH = ["ssh", "-i", os.path.expanduser("~/.ssh/id_ed25519_podminer"), "-o", "Ide
        "-o", "ConnectTimeout=15", "-o", "BatchMode=yes", "-p", "24138", "root@121.158.120.138"]
 U = "unknown"
 
-REMOTE = r'''
+ARTIFACTS = {"eth-bridge.elf": "tests/data/rv/eth-bridge.elf", "eth.elf": "tests/data/rv/eth.elf",
+             "calc-bridge.elf": "tests/data/rv/calc-bridge.elf", "ethskills.fs.npz": "build/ethskills.fs.npz"}
+REMOTE = "ARTIFACTS = " + repr(ARTIFACTS) + r'''
 import glob, json, os, re, subprocess
 def sh(c):
     try: return subprocess.run(c, shell=True, capture_output=True, text=True, timeout=30).stdout.strip()
@@ -113,6 +116,11 @@ out["chain"] = {"Judged batch": tail_marks("/workspace/eval3.log", "RUN_EXIT|EVA
                 "Fork batch": tail_marks("/workspace/eval4.log", "selected|RUN_EXIT|EVAL4_DONE|SERVER_FAILED|serve .* up"),
                 "Ethereus test, before": tail_marks("/workspace/etest-before.log", r"ARM_DONE|TEST_DONE| tool (True|False)"),
                 "Three-call serve rerun": tail_marks("/workspace/serve-recheck.log", "RESULT|EXIT|PASS|FAIL")}
+def h(p):
+    return sh(f"sha256sum {p} 2>/dev/null").split(" ")[0] or None
+R = "experimental/riscv/"
+out["hashes"] = {"route-a checkout": {n: h(f"/workspace/ethereus/{R}{p}") for n, p in ARTIFACTS.items()},
+                 "main checkout": {n: h(f"/workspace/ethereus-main/{R}{p}") for n, p in ARTIFACTS.items()}}
 out["gpu"] = sh("nvidia-smi --query-gpu=memory.used,memory.total,utilization.gpu --format=csv,noheader")
 for tag in ("before", "after"):
     f = f"/workspace/results/ethereus-test/{tag}/summary.txt"
@@ -244,6 +252,168 @@ def activity(data):
     return "".join(rows)
 
 
+BENCH = REPO / "experimental/riscv/docs/eth-bench.md"
+ORACLES = {"keccak": "eth_hash", "u256": "Python integers", "selector": "eth_hash", "encode": "eth_abi", "decode": "eth_abi",
+           "create": "eth_utils", "create2": "eth_utils", "run": "py-evm"}
+
+
+def bench_tables():
+    """[(section heading, column names, rows, section text)] from eth-bench.md, in file order."""
+    out, head, text, cols, rows = [], "", "", None, []
+    def close():
+        nonlocal cols, rows
+        if cols:
+            out.append((head, cols, rows))
+        cols, rows = None, []
+    sections = {}
+    for line in BENCH.read_text().splitlines():
+        if line.startswith("## "):
+            close()
+            head = line[3:]
+            sections[head] = ""
+            continue
+        if head:
+            sections[head] += line + "\n"
+        if line.startswith("|"):
+            cells = [c.strip().strip("`") for c in line.strip().strip("|").split("|")]
+            if cols is None:
+                cols = cells
+            elif not set("".join(cells)) <= set("-: "):
+                rows.append(dict(zip(cols, cells)))
+        else:
+            close()
+    close()
+    return out, sections
+
+
+def fw_commands():
+    tables, sections = bench_tables()
+    rows, over = [], {}
+    for head, cols, rs in tables:
+        if "over-80-tokens" in cols:
+            for r in rs:
+                over[r["op"]] = r["over-80-tokens"]
+    spill_on = re.search(r"^SPILL_ON_GPU = (\w+)", (REPO / "experimental/riscv/chipformer/rv/serve.py").read_text(), re.M)
+    spill_on = spill_on[1] if spill_on else U
+    def mism(head):
+        m = re.search(r"(\d+) accepted cases, (\d+) mismatches", sections.get(head, ""))
+        if m:
+            return m[2]
+        return "0 (bench: all equal)" if "all equal" in sections.get(head, "") else U
+    for head, cols, rs in tables:
+        state = "PASS" if "PASS" in head else U
+        date = (re.search(r"\d{4}-\d{2}-\d{2}", head) or [U])[0]
+        if "cases" in cols and "instr/call" in cols:
+            for r in rs:
+                wb = over.get(r["op"], "")
+                n = r["cases"]
+                st = state if n != "0" else "PASS inline untested: window-starved; covered via @file"
+                rows.append([r["op"], st, ORACLES.get(r["op"], U), n, mism(head), r["instr/call"], r.get("~wall", U), wb if wb and not wb.startswith("0") else "no", date])
+        elif "EVM gas" in cols:
+            for r in rs:
+                rows.append(["run " + r["call"], state, "py-evm", "12 (all calls)", mism(head), r["instr/call"], r.get("~wall", U), U, date])
+        elif "via @file" in " ".join(cols):
+            for r in rs:
+                rows.append([r[cols[0]] + " via @file", state, r["oracle"], r["cases"], mism(head), r["instr avg"], U, "bypasses it, reference only", date])
+    h = ["Command", "State", "Oracle", "Cases", "Mismatches", "Instr/call", "~Wall (L4, bench)", "Window-bound (over 80 tokens)", "Date"]
+    o = ["<table><tr>" + "".join(f"<th>{x}</th>" for x in h) + "<th>GPU</th></tr>"]
+    for r in rows:
+        gpu = "ok"
+        if "@file" in r[0]:
+            gpu = f"GPU-off: spill {spill_on}" if spill_on != "True" else "ok"
+        elif r[7] == U:
+            gpu = U
+        elif r[7] != "no":
+            gpu = "over-window calls error on GPU"
+        o.append("<tr>" + "".join(f"<td>{esc(c)}</td>" for c in r) + f"<td class='{'warn' if gpu != 'ok' else ''}'>{esc(gpu)}</td></tr>")
+    o.append("</table>")
+    return "".join(o), tables, sections
+
+
+def fw_trend(tables, sections):
+    series = {}
+    prev = re.search(r"Previous run[^:]*: keccak ([\d,]+) / u256 ([\d,]+) instr", " ".join(sections.values()).replace("\n", " "))
+    if prev:
+        series.setdefault("keccak", []).append(("before XKCP", prev[1]))
+        series.setdefault("u256", []).append(("before XKCP", prev[2]))
+    for head, cols, rs in tables:
+        date = (re.search(r"\d{4}-\d{2}-\d{2}", head) or [None])[0]
+        if not date:
+            continue
+        key = "instr/call" if "instr/call" in cols else "instr avg" if "instr avg" in cols else None
+        if not key:
+            continue
+        for r in rs:
+            name = r[cols[0]] + (" via @file" if key == "instr avg" else "")
+            if r[key] not in ("—", ""):
+                series.setdefault(name, []).append((date, r[key]))
+    rows = "".join(f"<tr><td>{esc(k)}</td><td>{' &rarr; '.join(f'{esc(v)} ({esc(d)})' for d, v in pts)}</td></tr>" for k, pts in series.items())
+    return f"<table><tr><th>Tool</th><th>Instructions, by dated bench section</th></tr>{rows}</table><p class='f'>Most tools have one dated entry so far. Source: eth-bench.md.</p>"
+
+
+def fw_artifacts(data):
+    R = "experimental/riscv/"
+    def git_sha(ref, path):
+        r = subprocess.run(["git", "show", f"{ref}:{R}{path}"], cwd=REPO, capture_output=True)
+        return hashlib.sha256(r.stdout).hexdigest() if r.returncode == 0 else None
+    cols = ["origin/main", "origin/route-a", "box route-a checkout", "box main checkout"]
+    head = "<table><tr><th>Artifact</th>" + "".join(f"<th>{c}</th>" for c in cols) + "<th>Check</th></tr>"
+    rows = []
+    box = (data or {}).get("hashes", {})
+    def add(name, values, need=None):
+        known = {v for v in values if v}
+        bad = len(known) > 1 or (need and need not in known)
+        cells = "".join(f"<td class='f'>{(v[:12] if v else 'n/a' if data else U)}</td>" for v in values)
+        rows.append(f"<tr class='{'red' if bad else ''}'><td>{esc(name)}</td>{cells}<td>{'MISMATCH' if bad else 'match' if known else U}</td></tr>")
+    for name, path in ARTIFACTS.items():
+        add(name, [git_sha("origin/main", path), git_sha("origin/route-a", path),
+                   box.get("route-a checkout", {}).get(name), box.get("main checkout", {}).get(name)])
+    try:
+        man = json.loads(subprocess.run(["git", "show", f"origin/main:{R}build/ethskills.fs.manifest.json"], cwd=REPO, capture_output=True, text=True).stdout)
+        elf = git_sha("origin/main", ARTIFACTS["eth-bridge.elf"])
+        ok = man["firmware_sha256"] == elf
+        rows.append(f"<tr class='{'' if ok else 'red'}'><td>snapshot manifest's firmware hash vs eth-bridge.elf</td><td class='f'>{man['firmware_sha256'][:12]}</td><td></td><td></td><td></td><td>{'match' if ok else 'MISMATCH'}</td></tr>")
+    except Exception:
+        rows.append(f"<tr><td>snapshot manifest's firmware hash</td><td>{U}</td><td></td><td></td><td></td><td>{U}</td></tr>")
+    return head + "".join(rows) + "</table>"
+
+
+def fw_limits():
+    spec = (REPO / "experimental/riscv/chipformer/rv/spec.py").read_text()
+    def words(name):
+        m = re.search(rf"{name}_BASE, {name}_WORDS = \S+, 1 << (\d+)", spec)
+        return 4 * (1 << int(m[1])) if m else None
+    cap = re.search(r"^CAP_MAX = (\d+)", spec, re.M)
+    used = {}
+    try:
+        r = subprocess.run(["riscv64-elf-size", "-A", str(REPO / "experimental/riscv" / ARTIFACTS["eth-bridge.elf"])], capture_output=True, text=True)
+        for ln in r.stdout.splitlines():
+            p = ln.split()
+            if len(p) == 3 and p[0].startswith("."):
+                used[p[0]] = (int(p[1]), int(p[2]))
+    except Exception:
+        pass
+    ram = used[".bss"][0] + used[".bss"][1] if ".bss" in used else None
+    def row(name, lim, u, unit="bytes"):
+        limit = f"{lim:,} {unit}" if lim else U
+        use = f"{u:,} ({100 * u / lim:.0f}%)" if u is not None and lim else ("n/a" if u is None and unit == "tokens" else U)
+        return f"<tr><td>{name}</td><td>{limit}</td><td>{use}</td></tr>"
+    return ("<table><tr><th>Fixed limit</th><th>Size</th><th>eth-bridge.elf uses</th></tr>"
+            + row("Tool-call capture window", int(cap[1]) if cap else None, None, "tokens")
+            + row("RAM", words("RAM"), ram) + row("ROM (code)", words("ROM"), used.get(".text", (None,))[0])
+            + row("DROM (read-only data)", words("DROM"), used.get(".rodata", (None,))[0])
+            + "</table><p class='f'>From spec.py and riscv64-elf-size on main's ELF. RAM use is the end of .bss; the stack also needs room below the top of RAM.</p>")
+
+
+def firmware(data):
+    try:
+        cmds, tables, sections = fw_commands()
+        return (cmds + "<h3>Artifacts</h3>" + fw_artifacts(data) + "<h3>Instruction counts over time</h3>" + fw_trend(tables, sections)
+                + "<h3>Fixed limits</h3>" + fw_limits())
+    except Exception as e:
+        return f"<p>{U}: could not read the firmware sources ({esc(type(e).__name__)}: {esc(e)}).</p>"
+
+
 def per_task(data):
     if not data or not data.get("per_task"):
         return f"<p>{U}</p>"
@@ -278,13 +448,14 @@ def main():
 h2{{color:#fff;border-bottom:1px solid #333;padding-bottom:4px;margin-top:28px}}table{{border-collapse:collapse;width:100%;margin:8px 0}}
 th,td{{border:1px solid #333;padding:4px 7px;text-align:left;vertical-align:top}}th{{background:#1c1c1c}}
 .off{{color:#666}}.f{{color:#888;font-size:12px;word-break:break-all}}pre{{background:#1a1a1a;padding:8px;overflow:auto}}
-summary{{cursor:pointer;color:#9bd}}.ok{{color:#6c6}}.bad{{color:#d77}}.warn{{color:#db6}}</style></head><body>
+summary{{cursor:pointer;color:#9bd}}.ok{{color:#6c6}}.bad{{color:#d77}}.warn{{color:#db6}}.red td{{background:#4a1616;color:#fbb}}</style></head><body>
 <h1>Ethereus status</h1>
 <h2>Now</h2><p><b>{time.strftime('%Y-%m-%d %H:%M UTC', time.gmtime())}</b>. {esc(now)}</p>
 <h2>Activity</h2>{activity(data)}
 <h2>Boxes</h2>{boxes(v, data)}
 <h2>Tasks</h2>{tasks()}
 <h2>Results</h2>{results(data)}{per_task(data)}
+<h2>Firmware</h2>{firmware(data)}
 <h2>Timeline</h2>{timeline()}
 </body></html>
 """
