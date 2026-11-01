@@ -30,6 +30,7 @@ from chipformer.rv.tools import ETH_TOOL
 MAX_TOKENS_DEFAULT, MAX_TOKENS_MAX = 4096, 8192
 SYNC_SECONDS = 120
 RATE_MINUTE, RATE_DAY = 30, 600
+MAX_CHIP = 1_000_000  # generate defaults to 60k, which cuts off a run: balanceOf is ~110k
 CONSENTS = ("off", "traces", "full")
 _TURN = re.compile(r"<tool_call>(.*?)</tool_call>\s*<tool_response>\n?(.*?)\n?</tool_response>\s*"
                    r"(?:<think>\s*</think>\s*)?", re.DOTALL)
@@ -108,7 +109,8 @@ class Engine:
             seg = {"prompt_ids": ids, "files": files}
             turn.segments.append(seg)
             try:
-                r = chat.generate(ids, spill.parked(fw), left, lock=lock, on_token=watch)
+                r = chat.generate(ids, spill.parked(fw), left, max_chip=MAX_CHIP, lock=lock,
+                                  on_token=watch)
             except OverWindow:
                 seg["gen_ids"] = watch.gen[:-1]  # up to, not including, the </tool_call>
                 seg["owner_mask"] = lock.own[len(ids):]
