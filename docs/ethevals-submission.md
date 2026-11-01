@@ -6,9 +6,8 @@ Status: configuration recorded before the runs. No scores yet; every number here
 
 Fraser, 2026-11-01:
 
-- Internet and Skills pass OpenCode's own tools through, and ours are added on top.
-- The 9 tasks whose grader uses `ANTHROPIC_API_KEY` are not run yet (list below).
-- The 28 tasks whose grader does not need the key run in every mode they allow.
+- Internet passes OpenCode's own tools through, and ours are added on top.
+- All 37 tasks on Internet, both arms: the 28 no-key tasks, then the 9 whose grader uses `ANTHROPIC_API_KEY` (list below). Fraser supplies the key.
 
 ## Exact configuration
 
@@ -17,12 +16,14 @@ Fraser, 2026-11-01:
 | Harness | `BuidlGuidl/ethevals`, Harbor 0.24.0, attempts per `runner/ethevals/job.yaml` (`n_attempts: 2`). Commit to be recorded at the first run |
 | Agent | OpenCode 1.18.33 via `ethevals.opencode:OpenCode`, no prompt changes |
 | Vanilla agent | `ethevals.vanilla:VanillaAgent`, one call, no tools |
-| Trial host | Vast VM 58640793, x86, 10 cores, 64 GB, Docker, its GPU unused. Instance 58623317 cannot run Docker: it is an unprivileged container |
-| Model host | Vast 58623317, RTX 6000D 85 GB. The route from trial host to model host is recorded at the first trial |
+| Host | One Vast VM, 58642243: x86, RTX PRO 6000 Blackwell WS 97 GB, Docker 28.1.1. Harness and model on the same box |
+| Model endpoint | `serve.py` on `172.17.0.1:8080`, one arm at a time, `route-a/gates/serve_arm.sh`. Job config `route-a/gates/job-ethereus.yaml` |
+| Venv | `/workspace/venv`, lock `route-a/gates/venv.lock.txt`: torch 2.15.0+cu132, transformers 5.22.1 |
+| Web search | No `EXA_API_KEY`, so no Exa search. The board treats it as optional; board rows on OpenCode may have it |
 | Base arm | Stock `Qwen/Qwen3.5-9B` through `chipformer/rv/serve.py` with `ETHEREUS_BASE=1`, offering only the client's tools |
 | Ethereus arm | `dist/q9-rv2` through `serve.py`, with `eth-bridge.elf` sha256 `b320d31b4fd722ac0adfdbcf1313892967ea1bf8e826bd318138cb167c06c685` |
 | Tools, Ethereus | `eth` plus the client's tools. `files` joins once a store checkpoint is merged |
-| Generation | Greedy on both arms |
+| Generation | Greedy on both arms, chat template with `enable_thinking=False` on both, because `RvChat.prompt_ids` fixes it and the driver is not changed. So these rows measure Qwen without its thinking mode |
 | Server settings | `ETHEREUS_BUFFERED_STREAM=1`, `ETHEREUS_SYNC_SECONDS` raised for long turns |
 
 How the Ethereus arm answers tools: a call to `eth` runs in the circuit and its response stays in the assistant content, so OpenCode sends it back as history and never sees it as a tool to run. A call to any other tool stops generation at `</tool_call>` before the circuit runs and goes to OpenCode as OpenAI `tool_calls`.
@@ -32,7 +33,7 @@ Deviations from `docs/api-spec-clean.md`, all for this eval:
 - Client tools are honoured, where the spec says to ignore them (Fraser's decision).
 - `stream: true` is answered after generation ends, with keepalive comments. OpenCode needs a streaming response; tokens are not actually streamed, so timing here is not comparable with a streaming provider.
 
-Not recorded yet, to be filled from the first trial: the OpenCode provider config, web search setup (`EXA_API_KEY` on the board).
+
 
 ## Task coverage
 

@@ -245,7 +245,8 @@ class BaseEngine:
                 return deadline is not None and time.time() > deadline
 
         enc = self.tok.apply_chat_template(messages, tools=list(client_tools) or None,
-                                           add_generation_prompt=True, return_dict=True)
+                                           add_generation_prompt=True, enable_thinking=False,
+                                           return_dict=True)  # as RvChat.prompt_ids: same prompt
         ids = list(enc["input_ids"])
         eos = self.model.generation_config.eos_token_id
         eos = eos if isinstance(eos, list) else [] if eos is None else [eos]
