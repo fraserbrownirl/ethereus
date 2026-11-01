@@ -31,3 +31,13 @@ One line per tick: time (UTC), what changed. Spend is omitted because Fraser mon
 - 2026-11-01 16:22 Gate 4 recheck PASS after `logits_to_keep=1`: 6/6, token counts identical to the pinned run.
 - 2026-11-01 16:22 Base judged batch: 0 of 7 tasks; base total 6 of 30 scored. Judge spend $2.71.
 - 2026-11-01 16:55 Fraser's seven catchers added: three tasks in `docs/dispatcher-tasks.md`, rules in `docs/dispatcher-rules.md`.
+
+## 2026-11-01 17:20 UTC
+
+- Oracle independence: flipped keccak constant fails gate 1 (keccak 40/40, create 37/40, selector 15/40); control passes. `experimental/riscv/docs/logs/oracle-independence.log`. My first driver reported a false pass because `path=ELF` bound its default at definition; fixed in `eth.py`, which also now exits 1 on a failed gate.
+- Malformed input: no crash, hang or garbage on the frozen ELF. `experimental/riscv/docs/logs/malformed-input.log`. Six lenient forms are fixed on `spill-eth-in`.
+- Provenance: both ELFs rebuild to the same loaded bytes, locally and on GitHub's runner. `experimental/riscv/docs/logs/provenance.log`. `gh` defaults to the upstream repo in this checkout; pass `--repo fraserbrownirl/ethereus`.
+- Environment pin: `ENV_PIN OK` on the VM, tampered lock reads DRIFT. `dist/q9-rv2/env-pin.json` on the VM. Canary script refuses while a server holds the GPU; no run yet.
+- Fraser: inputs the firmware rejects by design are asserted as errors, not compared. Now rule 5. On the branch these go through `ByDesign`/`REJECT`, and `keccak @name` with no file joined them after a 200-case gate found it.
+- Branch `spill-eth-in`, worktree `~/Dev/ethereus-spill`: bridge prefers `eth_in`, `serve.py` interrupts only calls it can move, `SPILL_ON_GPU` on. Bridge ELF there is not b320d31b and stays off main until the freeze lifts. Full gate 1 running: `docs/logs/gate1-spill.log` in that worktree.
+
