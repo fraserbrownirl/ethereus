@@ -121,6 +121,11 @@ def h(p):
 R = "experimental/riscv/"
 out["hashes"] = {"route-a checkout": {n: h(f"/workspace/ethereus/{R}{p}") for n, p in ARTIFACTS.items()},
                  "main checkout": {n: h(f"/workspace/ethereus-main/{R}{p}") for n, p in ARTIFACTS.items()}}
+def _js(p):
+    try: return json.load(open(p))
+    except Exception: return None
+out["env_pin"] = _js("/workspace/ethereus/dist/q9-rv2/env-pin.json")
+out["canary"] = _js("/workspace/canary.json")
 out["gate_times"] = {}
 _g = "/workspace/ethereus/dist/q9-rv2/gate4-keep1"
 if os.path.exists(_g + "/gate4.log"):
@@ -229,7 +234,19 @@ def results(data):
                    + f"<td>{esc(ve['line']) if ve else U}</td>"
                    + f"<td>{esc(', '.join(a + ' ' + b for a, b in sm['totals'])) if sm else U}</td>"
                    + "<td class='f'>" + "<br>".join(esc(x["file"]) for x in (g1, g2, g4, sm, ve) if x) + "</td></tr>")
-    out.append("</table><h3>ETH Evals, Internet, 9B</h3><table><tr><th>Arm</th><th>Tasks scored</th><th>Tasks passed</th><th>Trials passed</th><th>Errors</th><th>File</th></tr>")
+    out.append("</table>")
+    pin = data.get("env_pin")
+    if pin:
+        ok = not pin["drift"]
+        vs = ", ".join(f"{k} {v}" for k, v in pin["versions"].items())
+        out.append(f"<p style='{'' if ok else 'background:#7a5a00;color:#fff;padding:4px'}'><b>Environment:</b> "
+                   + ("matches the pinned venv and driver. " if ok else "differs from the pin: " + esc("; ".join(pin["drift"][:6])) + ". ")
+                   + esc(f"{vs}, driver {pin['driver']}.") + " <span class='f'>dist/q9-rv2/env-pin.json</span></p>")
+    else:
+        out.append(f"<p><b>Environment:</b> {U}.</p>")
+    c = data.get("canary")
+    out.append(f"<p><b>Canary:</b> {esc(c['result'] + ' at ' + c['at'])} <span class='f'>{esc(c['log'])}</span></p>" if c else "<p><b>Canary:</b> no run yet; it needs the GPU free.</p>")
+    out.append("<h3>ETH Evals, Internet, 9B</h3><table><tr><th>Arm</th><th>Tasks scored</th><th>Tasks passed</th><th>Trials passed</th><th>Errors</th><th>File</th></tr>")
     for arm, a in data["arms"].items():
         out.append(f"<tr><td>{arm}</td><td>{a['tasks_scored']}</td><td>{a['tasks_passed']}</td>"
                    f"<td>{a['trials_passed']}/{a['trials']}</td><td>{a['errors']}</td><td class='f'>{esc(a['file'])}</td></tr>")
