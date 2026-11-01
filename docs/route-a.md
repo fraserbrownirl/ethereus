@@ -102,6 +102,19 @@ On-disk merged growth (dense): 9B 19.31 → 32.9 GB (+13.6 GB; 3.3 GB chip-layer
 
 ### 2.2 Gates
 
+**Gate 1 (textcheck) on `dist/q9-rv2`: PASS, 2026-11-01 07:38 UTC. This supersedes the `q9-rv1` FAIL below.**
+
+| Checkpoint | KL merged (mean) | Noise floor (mean) | Ratio (pass ≤ 2×) | Greedy identical | Top-1 agree (mean) | Max per-prompt KL |
+|---|---|---|---|---|---|---|
+| `dist/q9-rv1` (tied head) | 12.29 | 3.77e-4 | 32,581× FAIL | 0/16 | 0.0 | not recorded |
+| `dist/q9-rv2` (fix `1500fba`) | 6.34e-4 | 3.77e-4 | 1.68× PASS | 12/16 | 0.989 | 9.79e-4 |
+
+Cause (F2): `Qwen/Qwen3.5-9B` is untied (`tie_word_embeddings: false`). `merge.py` dropped `lm_head.weight` and forced tying, so the merged model decoded with the embedding. Checks on `q9-rv1`: first-Qwen-layer input exact on base dims, one chip dim nonzero at about 9e-13; config differs from base only in intended widening fields plus `tie_word_embeddings`; `embed_tokens[:248320, :4096]` equals base exactly; `lm_head` does not. Fix: `merge.output_head` keeps the base head on Qwen's rows and dims, and the embedding's chip columns and RV32 rows. Tied bases such as the 4B write no `lm_head` and keep tying.
+
+`q9-rv2` merge: exit 0, 2:59.74 wall, peak RSS 57.9 GB (57,870,728 kB), `tie_word_embeddings: false`, `lm_head.weight` in the index. Shard hashes: `dist/q9-rv2/sha256sums.txt` on the box.
+
+Caveats: the 4 non-identical greedy runs are prompts 4, 5, 7 and 9, and textcheck's pass condition is the KL ratio, not greedy identity. The ratio is higher than the 4B's 1.2×. `textcheck.py` exits 0 on failure, so read the KL. Gate 2 ran before this fix and builds its own circuit model, not this checkpoint, so it stands. Gates 3 and 4 have not run on `q9-rv2`.
+
 1. **`rv/textcheck.py` — FAIL — `kl_merged_mean 12.29` vs floor `0.000377` = 32,581× (pass ≤2×).**
    - **Runner:** `cd /workspace && PYTHONPATH=ethereus/experimental/riscv:ethereus python3 -m chipformer.rv.textcheck /workspace/models/Qwen3.5-9B /workspace/ethereus/dist/q9-rv1 --out rv-text.json` (commit `0c11495` — `textcheck: load base via Qwen3_5ForCausalLM (transformers 5.22)`; note: base `Qwen3_5TextConfig` under transformers 5.22 is rejected by `AutoModelForImageTextToText`, so base now loads via `Qwen3_5ForCausalLM` like merged).
    - **Numbers:** `kl_merged_mean 12.294`, `kl_noise_floor_mean 0.000377`, ratio **32,581×**, `greedy_identical 0/16`, `tokenizer_identical 4/4 true`, `top1_agree 0.0` mean (every token mispredicted). Per-prompt `kl_merged [12.20, 13.40, 12.63, 12.50, …]`, `kl_noise_floor [0.00038, 0.00019, …]`. No missing-weight warnings in log (only tokenizer-regex + triton warnings).
