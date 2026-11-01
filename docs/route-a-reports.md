@@ -51,3 +51,13 @@ Per standing rule: this chat report was appended here, committed and pushed befo
 
 Pushed this entry as part of `route-a` report stream.
 
+## 2026-11-01 07:55 UTC — gate 1 PASSED on q9-rv2, task 9 ELF taken, gates 3–4 BLOCKED, base vLLM fallback
+
+Per standing rule: appended before chat, then pushed.
+
+- **Gate 1 PASSED on `q9-rv2` (dispatcher-verified 07:38 UTC):** `q9-rv1` STOP lifted. Values from `dist/q9-rv2/rv-text.json` — `kl_merged_mean 6.34e-4` vs floor `3.77e-4` ratio **1.68×** (pass ≤2×), **12/16 greedy**, `top1 0.989`, per-prompt max `9.79e-4`. Merge: 2:59 wall, RSS 57.9 GiB, `tie_word_embeddings false`, `lm_head.weight` in index (fix `1500fba` kept untied base head). `docs/route-a.md` §2 header updated.
+- **Task 9 (firmware):** `git checkout c0853b4 -- experimental/riscv/tests/data/rv/eth-bridge.elf` → `b320d31b4fd722ac0adfdbcf1313892967ea1bf8e826bd318138cb167c06c685` (verified), `readelf -S` has `.filebuf` (offset 0x900, 4 KiB). Committed `76cb200`, box pulled and verified same hash.
+- **Tasks 8 / gates 3–4 on `q9-rv2`:** **BLOCKED.** `chipformer.rv.chat --check --ask` with new ELF hangs after `Loading weights: 581/581` (no generation output, both fast and --slow, killed at 90s; fast 106% CPU 1:36, slow 109% 0:54). Brief asked `--executor` which does not exist (`chat.py` has --check/--slow). `docs/route-a.md` §2.2 gate 4 rewritten to BLOCKED with logs. Next: strace/--verbose + two more attempts (stop rule: 3 fails or 15 min).
+- **Base vLLM (task 10):** vLLM 0.32.0 installed but `Qwen3_5ForConditionalGeneration` not in vLLM registry → model load ValidationError. Per brief stop rule: after 3 attempts, use HF server. vLLM killed; HF serve path pending (gate 4 blocker deprioritizes baseline briefly). Disk 98G/220G (45%), merged eval (task 4) still queued after gates 3–4.
+- **Spend:** 58623317 **2.1h ($2.12) @ $1.01/h** since 05:50 UTC; $150 cap. q9-rv1 not used; q9-rv2 is current.
+
