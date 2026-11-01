@@ -42,6 +42,11 @@ def test_tool_output_is_never_trained_and_final_restates_it(data):
             assert r["tool_outputs"][-1].splitlines()[0] in r["messages"][-1]["content"]
 
 
+def test_prompt_variants_are_consistent(data):
+    for r in data[0]:
+        assert ("bash" in r["tools"]) == (r["prompt_variant"] != "plain")
+
+
 def test_run_final_reads_return_not_gas(data):
     for r in data[0]:
         if r["family"] == "run":
@@ -69,3 +74,16 @@ def test_smoke_questions_are_held_out(data):
     for r in data[0]:
         if r["family"] in ("files", "knowledge"):
             assert all(q["answer"].lower() not in r["answer"].lower() for q in SMOKE)
+
+
+def test_dmind_filter_drops_what_the_skills_cover():
+    sys.path.insert(0, str(RV / "scripts"))
+    sys.path.insert(0, str(RV))
+    import gen_ft_data as g
+
+    corpus = "use eip-7702 for delegation. the gas limit rose."
+    assert g.in_skills("What does EIP-7702 add?", "Delegation for accounts", corpus)
+    assert g.in_skills("What is 'gas' used for?", "Paying fees", corpus)
+    assert g.in_skills("Pick one.", "the gas limit rose", corpus)
+    assert not g.in_skills("What is 'Quorum' in a vote?", "A minimum turnout", corpus)
+

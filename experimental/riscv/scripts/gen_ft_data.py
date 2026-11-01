@@ -35,10 +35,14 @@ SMOKE = RV / "scripts/smoke_questions.json"
 BUILTINS = json.loads((RV / "tests/data/rv/eth.builtins.json").read_text())
 A, B, S = (BUILTINS[k] for k in ("alice", "bob", "spender"))
 SEED = 20261101
-MAX_LEN = 4096
+MAX_LEN = 8192  # the spec says 4096, but real OpenCode prompts alone are about 7,400 tokens
 SYSTEM = json.loads(SMOKE.read_text())["system_line"]
-COUNTS = {"abi": 800, "u256": 400, "create": 200, "run": 400, "files": 600, "negative": 100, "knowledge": 500}
+COUNTS = {"abi": 800, "u256": 400, "create": 200, "run": 400, "files": 600, "negative": 594, "knowledge": 500}
 TOOLS = [ETH_TOOL, *ST.TOOLS]
+OPENCODE = json.loads((RV / "data/ft1/opencode_capture.json").read_text())  # captured from a real eval request
+P_OPENCODE_TOOLS, P_OPENCODE_SYSTEM = 0.30, 0.10  # 30% of examples; 10% of those also get its system prompt
+DMIND_REV = "9954c9c394"  # CC-BY-4.0 per the spec. Never the held-out Security, SmartContract or Infra subsets.
+DMIND = ["Blockchain_Fundamentals", "DAO", "NFT", "Tokenomist"]
 
 
 def sel(sig):
@@ -136,8 +140,10 @@ def create(r):
 
 def run(r):
     """Calls on the built-in contracts' fixed state. Random addresses are valid: they hold 0 there."""
-    who = addr(r, 0.4)
-    k = r.choice(["balance"] * 4 + ["allowance"] * 3 + ["transfer"] + ["approve"] + ["supply", "decimals", "amm"])
+    # Qwen spends a token per digit, so zero-padded words and digit-heavy addresses overflow the 80-token
+    # window: balanceOf(alice) takes 102. Letter-heavy addresses fit, and hold 0 on the fixture.
+    who = "0x" + "".join(r.choice("abcdefabcdef0123") for _ in range(40))
+    k = r.choice(["balance"] * 8 + ["supply", "decimals"])
 
     def ret(o):
         return o[-1].splitlines()[0] if o[-1].startswith("0x") else o[-1]
@@ -216,7 +222,7 @@ PARAPHRASE = ["{}", "Quick question: {}", "{} Keep it short.", "Please answer br
 
 # --- knowledge: sentences from the store's own response, so an answer always appears in its file -----------
 
-SENT = re.compile(r"^[A-Z`*][^|#\n]{50,220}[.]$")
+SENT = re.compile(r"^[A-Z`][^|#\n]{30,300}[.:]$")
 
 
 def facts_of(body):
@@ -278,6 +284,7 @@ def init():
         for i, piece in enumerate(f["pieces"]):
             s.call("put" if i == 0 else "append", name, piece)
     G["dev"] = s.dev
+    G["dmind"] = dmind_rows()
 
 
 def session():
@@ -301,19 +308,25 @@ def tool_text(ids):
     return (m.group(1) if m else s).strip()
 
 
-def prompt_ids(user):
-    msgs = [{"role": "system", "content": SYSTEM}, {"role": "user", "content": user}]
-    out = G["hf"].apply_chat_template(msgs, tools=TOOLS, chat_template=G["template"], add_generation_prompt=True,
+def prompt_ids(user, r):
+    """Tools as the eval sees them on some examples: ours plus OpenCode's real tools, some with its system prompt."""
+    tools, system, variant = TOOLS, SYSTEM, "plain"
+    if r.random() < P_OPENCODE_TOOLS:
+        tools, variant = TOOLS + OPENCODE["tools"], "opencode_tools"
+        if r.random() < P_OPENCODE_SYSTEM:
+            system, variant = OPENCODE["system"], "opencode_system"
+    msgs = [{"role": "system", "content": system}, {"role": "user", "content": user}]
+    out = G["hf"].apply_chat_template(msgs, tools=tools, chat_template=G["template"], add_generation_prompt=True,
                                        enable_thinking=False, tokenize=True)
-    return list(out if isinstance(out, list) else out["input_ids"]), msgs
+    return list(out if isinstance(out, list) else out["input_ids"]), msgs, variant, [t["function"]["name"] for t in tools]
 
 
 IM_END = 248046
 
 
-def finish(meta, user, steps, answer):
+def finish(meta, user, steps, answer, r):
     """steps: [(openai call, call ids, response ids)]. Builds the record with per-token loss flags."""
-    ids, msgs = prompt_ids(user)
+    ids, msgs, variant, names = prompt_ids(user, r)
     segs = [{"role": "prompt", "train": False, "ids": ids}]
     for call, cids, resp in steps:
         segs.append({"role": "assistant_call", "train": True, "ids": cids})
@@ -325,7 +338,7 @@ def finish(meta, user, steps, answer):
     total = sum(len(s["ids"]) for s in segs)
     if total > MAX_LEN:
         return None, "over_max_len"
-    return {**meta, "messages": msgs, "tools": [t["function"]["name"] for t in TOOLS], "n_tokens": total, "segments": segs}, None
+    return {**meta, "messages": msgs, "prompt_variant": variant, "tools": names, "n_tokens": total, "segments": segs}, None
 
 
 def make(job):
@@ -335,9 +348,16 @@ def make(job):
     T = G["T"]
     try:
         if family == "negative":
-            q, a = NEGATIVE[i % len(NEGATIVE)]
-            user = PARAPHRASE[(i // len(NEGATIVE)) % len(PARAPHRASE)].format(q)
-            return finish(meta, user, [], a)
+            hand = len(NEGATIVE) * len(PARAPHRASE)
+            if i < hand:
+                q, a = NEGATIVE[i % len(NEGATIVE)]
+                user = PARAPHRASE[(i // len(NEGATIVE)) % len(PARAPHRASE)].format(q)
+                return finish({**meta, "source": "hand"}, user, [], a, r)
+            d = G["dmind"]
+            if i - hand >= len(d):
+                return None, "dmind_exhausted"
+            sub, q, a = d[i - hand]
+            return finish({**meta, "source": "dmind/" + sub}, q, [], a, r)
         if family in ("files", "knowledge"):
             return make_knowledge(meta, family, r)
         q, cmds, answer = {"abi": abi, "u256": u256, "create": create, "run": run}[family](r)
@@ -352,18 +372,61 @@ def make(job):
                 return None, "tool_error:" + out[:30]
             outs.append(out)
             steps.append(({"name": "eth", "arguments": {"cmd": cmd}}, cids, resp))
-        return finish({**meta, "tool_outputs": outs}, q, steps, answer(outs))
+        return finish({**meta, "tool_outputs": outs}, q, steps, answer(outs), r)
     except Exception as e:  # noqa: BLE001 - a bad draw is counted, not fatal
         return None, f"exception:{type(e).__name__}"
 
 
-FITS = 3400  # a get response must leave room for the prompt inside MAX_LEN
+GENERIC = set("ethereum blockchain token tokens nft nfts dao daos defi bitcoin crypto proof smart contract contracts".split())
+
+
+def key_terms(q, a):
+    """Proper nouns and identifiers: EIP and ERC numbers, acronyms, CamelCase, mid-sentence capitals, quoted terms."""
+    out = set()
+    for s in (q, a):
+        out |= set(re.findall(r"\b(?:EIP|ERC)[- ]?\d+\b", s))
+        out |= set(re.findall(r"\b[A-Z]{2,}\d*\b", s))
+        out |= set(re.findall(r"\b[A-Z][a-z]+(?:[A-Z][a-z]+)+\b", s))
+        out |= set(re.findall(r"(?<=[a-z,] )[A-Z][a-zA-Z]{3,}", s))
+        out |= set(re.findall(r"['\"]([A-Za-z][\w -]{2,30})['\"]", s))
+    return {t for t in out if t.lower() not in GENERIC}
+
+
+def in_skills(q, a, corpus):
+    """Fraser: drop a negative whose answer or key term appears in es/, where the right move is to read the file."""
+    if len(a) >= 4 and a.lower() in corpus:
+        return True
+    return any(re.search(r"\b" + re.escape(t.lower()) + r"\b", corpus) for t in key_terms(q, a))
+
+
+def dmind_rows():
+    """Single-answer questions from the allowed subsets, answered directly, with the correct option's text.
+    Each row's own license column must say CC-BY-4.0."""
+    import csv
+
+    corpus = " ".join(G["T"].tok.decode([t for p in f["pieces"] for t in p], skip_special_tokens=False)
+                      for f in G["man"]["files"]).lower()
+
+    from huggingface_hub import hf_hub_download
+
+    rows = []
+    for sub in DMIND:
+        p = hf_hub_download("DMindAI/DMind_Benchmark", f"test_data/objective/{sub}.csv", repo_type="dataset", revision=DMIND_REV)
+        for row in csv.DictReader(open(p, encoding="utf-8-sig")):
+            ans = (row.get("Correct option") or "").strip()
+            if ans not in ("A", "B", "C", "D") or not row.get(f"Option {ans}") or len(row.get("Question") or "") < 10:
+                continue
+            if (row.get("license") or "").strip() != "CC-BY-4.0" or in_skills(row["Question"], row[f"Option {ans}"], corpus):
+                continue
+            opts = "\n".join(f"{k}. {row[f'Option {k}'].strip()}" for k in "ABCD")
+            rows.append((sub, f"{row['Question'].strip()}\n\n{opts}", f"{ans}. {row[f'Option {ans}'].strip()}"))
+    random.Random(SEED).shuffle(rows)
+    return rows
 
 
 def make_knowledge(meta, family, r):
     T = G["T"]
-    files = [f for f in G["man"]["files"] if f["tokens"] <= FITS]
-    f = r.choice(files)
+    f = r.choice(G["man"]["files"])
     name = enc(f["name"])
     ses = session()
     steps = []
@@ -381,8 +444,12 @@ def make_knowledge(meta, family, r):
     if sent not in body:
         return None, "answer_not_in_file"
     if family == "files":
-        user = r.choice([f"What should I know about {head}?", f"On Ethereum, what's the current guidance on {head}?",
-                         f"Tell me about {head} in Ethereum development."])
+        words = sent.split()
+        at = r.randint(0, max(0, len(words) - 5))
+        phrase = " ".join(words[at:at + 4]).strip(".,:;`")
+        user = r.choice([f"On {head}: what is the guidance on \"{phrase}\"?",
+                         f"What should I know about \"{phrase}\", under {head}?",
+                         f"For {head}, what does the reference say about \"{phrase}\"?"])
         ans = f"{sent}\n\n(Source: `{f['name']}`)"
     else:
         words = sent.split()
@@ -391,7 +458,7 @@ def make_knowledge(meta, family, r):
         ans = f"{sent}\n\n(Source: `{f['name']}`)"
     if leaks_smoke(user, G["smoke"]):
         return None, "smoke_leak"
-    return finish({**meta, "source": f["name"], "answer": sent}, user, steps, ans)
+    return finish({**meta, "source": f["name"], "answer": sent}, user, steps, ans, r)
 
 
 def main():
@@ -414,14 +481,14 @@ def main():
         for fam, want in COUNTS.items():
             want = max(1, round(want * a.scale))
             rows, rejects, seen, i = [], Counter(), set(), 0
-            while len(rows) < want and i < want * 8:
+            while len(rows) < want and i < want * 40 + 1000:
                 batch = [(fam, j) for j in range(i, i + max(want, a.workers * 4))]
                 i += len(batch)
                 for row, why in pool.imap(make, batch):
                     if row is None:
                         rejects[why] += 1
                         continue
-                    key = json.dumps(row["messages"][1:2])
+                    key = row["messages"][1]["content"] + "\0" + row["messages"][-1]["content"]
                     if key in seen:
                         rejects["duplicate"] += 1
                         continue
@@ -438,9 +505,22 @@ def main():
                 for row in rows:
                     f.write(json.dumps(row, ensure_ascii=False) + "\n")
             man["families"][fam] = {"wanted": want, "written": len(rows), "heldout": n_hold, "rejected": dict(rejects),
-                                    "max_tokens": max((x["n_tokens"] for x in rows), default=0)}
+                                    "max_tokens": max((x["n_tokens"] for x in rows), default=0),
+                                    "variants": dict(Counter(x["prompt_variant"] for x in rows)),
+                                    "sources": dict(Counter(x["source"].split("/")[0] if x["family"] == "negative" else x["source"] for x in rows if x.get("source")))}
+            if fam == "knowledge":
+                sample = sorted(rows, key=lambda x: hashlib.sha256(x["id"].encode()).hexdigest())[:30]
+                man["sample"] = [x["id"] for x in sample]
+                G["sample"] = sample
             print(fam, man["families"][fam], flush=True)
     (out / "manifest.json").write_text(json.dumps(man, indent=1) + "\n")
+    lines = ["# Fine-tune knowledge examples, 30 for review\n", "Generated by `scripts/gen_ft_data.py`. Not reviewed; not yet used for training.\n"]
+    for x in G.get("sample", []):
+        lines += [f"## {x['id']}\n", f"Variant: {x['prompt_variant']}. Source: `{x['source']}`.\n", f"**Question:** {x['messages'][1]['content']}\n",
+                  f"**Tool calls:** {', '.join(m['tool_calls'][0]['function']['name'] for m in x['messages'] if m.get('tool_calls'))}\n",
+                  f"**Answer:** {x['messages'][-1]['content']}\n"]
+    if a.scale == 1.0:
+        (RV.parents[1] / "docs/ft1-sample.md").write_text("\n".join(lines))
     print("GEN_DONE")
 
 
