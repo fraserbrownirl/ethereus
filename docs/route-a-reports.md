@@ -34,3 +34,20 @@ Standing rule acknowledged: every chat report is now also a dated `##` entry in 
 
 Instance 58623317: **07:44 UTC = 1.92 h ($1.94) @ $1.01/h**, nothing destroyed.
 
+## 2026-11-01 07:47 UTC — tasks 8 + 10 (base eval proceeds, merged blocked) + standing-rule batch ack
+
+Per standing rule: this chat report was appended here, committed and pushed before posting.
+
+**Batch you confirmed (notifications 881838–881843, 07:32–07:47 UTC):**
+- **881838 Install vLLM + clone ethevals:** `pip install vllm` started (pulled opentelemetry/numba/torch 2.13 + flashinfer 0.7 etc); `/workspace/ethevals` cloned from `https://github.com/BuidlGuidl/ethevals` (ok on retry, HEAD `cc3daaf`, 16+ concepts tasks present: `accounts-1271…`, `agent-registries`, `compiler-*`, `evm-*`, `governance-*`, `lending-*`, `permit2-*`, `signatures-*`, …).
+- **881839–881843 duplicate pips:** `pip install vllm` spawned twice (10371 + 10517); duplicate killed, single `10371 --quiet` remains. At 07:47 still `WARNING: Package(s) not found: vllm` (install incomplete, expected — vllm build ~8–10 min with torch/flashinfer). Disk 57G/220G (26%), GPU idle (no vLLM yet). `ethevals` at `/workspace/ethevals` verified (`tasks/concepts/` + `runner/`).
+
+**Tasks 8 + 10 state (scoped by STOP NOTICE 07:25 / task 12):**
+- **Task 8 (gates 3–4):** §2.2 already records `The six reference records are not in the tree.` Gate 3 could-not-run. Six `chat --executor --check --ask` runs remain *deferred* to task 9’s rebuilt `.filebuf` ELF (hash + `readelf -S .filebuf` checks); no re-run of gates 1–3. No action until dispatcher ELF hash.
+- **Task 10 (baseline Concepts):** Base-only eval **may proceed** per your rule (merged-model eval blocked until dispatcher marks gate 1 passed). Harness is `ethevals` (Harbor-based, not OpenCode — site lists `skills-lock.json`/`runner/`). Plan holds: when `pip show vllm` reports `Name: vllm`, run `vllm serve /workspace/models/Qwen3.5-9B --gpu-memory-utilization 0.45 --max-model-len 4096 --port 8000` (45% leaves ≤40 GiB headroom on 85 GiB RTX 6000D for gates), then `concepts` pillar Internet config → `route-a/trajectories/baseline/`. Until then, polling install.
+- **Task 12 gate 1 F2:** `q9-rv1` textcheck FAIL unchanged (KL 12.29, 32,581× floor, 0/16 greedy); cause documented in `docs/route-a.md` §2.2 as untied `lm_head` dropped at `merge.py:101`. No patch to `merge.py`; awaiting `main` untied-head commit hash → `q9-rv2` re-merge (~4 min/55 GiB) → textcheck rerun (gate 2 stays).
+
+**Gate 1 blocker still gates merged work; instance spend:** 58623317 **07:47 UTC = 1.95 h ($1.97) @ $1.01/h** (since 05:50 UTC, $150/wk cap). Nothing destroyed; next push will be `q9-rv2` or vLLM-ready baseline.
+
+Pushed this entry as part of `route-a` report stream.
+
