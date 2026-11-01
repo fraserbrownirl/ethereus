@@ -178,6 +178,39 @@ instead of G_verylow 3; the ADDMOD/MULMOD depth row named 0x0C/0x0D
 (the real opcodes are 0x08/0x09) and sat shadowed behind the 0x01–0x0B
 row, admitting a 2-deep stack for a 3-pop op.
 
+## Gate 1 — full-width @file: decode/create2/run (2026-11-01, PASS)
+
+Large arguments never go through the token window on any path: the
+bridge resolves `@name` and the host writes the content into
+`file_buf`, a 4 KB firmware section at RAM 0x900, outside the capture.
+The firmware's `file_arg()` resolves `@name` over `name\0hex\0` pairs
+(wired into keccak/encode/decode/create2/run); a missing name answers
+`error (no file)`, and a quoted `"@b"` stays a literal string. This is
+the same mechanism as the API gateway's spill.
+
+`tests/test_rv_filebuf.py`: 15/15. Three bulk gates of 200
+seeded full-width cases each vs the same oracles as the inline gate
+(eth_abi, eth_hash, py-evm); every case asserts its inline form
+exceeds the 80-token window, so the file path is load-bearing, not
+convenience. Plus 12 singles: 1 KB keccak, bytes-400 encode,
+quoted-`@` literal, 4 missing-file errors, 16-case decode/create2
+fuzz.
+
+| op (via @file) | cases | oracle | instr avg |
+| --- | --- | --- | --- |
+| decode (uint256,bytes≤800,address,bytes,bool) | 200 | eth_abi | 57,408 |
+| create2 (full 32 B salt + hash) | 200 | eth_utils | 29,027 |
+| run erc20 (transfer/transferFrom/approve + 64–400 B pad) | 200 | py-evm | 117,148 |
+
+Run cases vary sender (alice/spender, so transferFrom covers both the
+allowance path and the revert path) and pad length; return data, gross
+gas, revert status, and logs all equal py-evm.
+
+Honest limit for the site's table: in-model file-to-tool relay is ~2
+words — Qwen can repeat a tiny `files get` answer into the next call,
+but anything bigger must go through the bridge/gateway spill. The
+model never sees full file bytes in-window except through the spill.
+
 ## Probe table (non-bridge, exact counts)
 
 | call | instr | before | notes |

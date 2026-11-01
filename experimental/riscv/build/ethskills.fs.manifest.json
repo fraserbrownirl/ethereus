@@ -1,0 +1,35 @@
+{
+  "snapshot": "ethskills.fs.npz",
+  "sha256": "aad051b2f41f661eeb295e0de6607e346e5727febd99934c5e2cf7482502f98f",
+  "files": [
+    "es/index.md",
+    "es/why.md",
+    "es/protocol.md",
+    "es/gas.md",
+    "es/l2s.md",
+    "es/standards.md",
+    "es/tools.md",
+    "es/wallets.md",
+    "es/indexing.md",
+    "es/blocks.md",
+    "es/amaster.md",
+    "es/general.md",
+    "es/lending.md",
+    "es/amm.md",
+    "es/oracles.md",
+    "es/vaults.md"
+  ],
+  "token_count": 39539,
+  "firmware": "calc-bridge.elf",
+  "firmware_sha256": "b643ad61291a947fa6c7498de9170b1d4da062dc1f34810feba9c4eebdec862d",
+  "store_cfg": {
+    "slot_bits": 10,
+    "n_chunks": 512,
+    "n_names": 512,
+    "hash_bits": null
+  },
+  "sources": {
+    "ethskills": "47779e720e99c0d5014c0612a08500bdd565108f",
+    "evm-audit-skills": "185aed78eb6f2cbb30968cfd749ec52d19c761e3"
+  }
+}

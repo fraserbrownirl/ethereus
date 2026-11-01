@@ -21,6 +21,17 @@ char eth_in[2048];
 #else
 char eth_in[2048] __attribute__((section(".ethin")));
 #endif
+// Bridge-resolved @file args: the host writes name\0hex\0 pairs, double-NUL
+// terminated, into file_buf (RAM 0x900, 4 KB, outside the 80-token capture).
+// Large arguments never go through the token window on any path; the bridge
+// image has no buffer and answers error (no file). Max ~4K hex chars per
+// command (~2 KB of data, ~16x the window).
+#define FILE_BUF_SIZE 4096
+#ifdef HOST_FUZZ
+char file_buf[FILE_BUF_SIZE];
+#else
+char file_buf[FILE_BUF_SIZE] __attribute__((section(".filebuf")));
+#endif
 #endif
 
 static void put(int c){ rv_ecall2(1,c,0,0); }
@@ -73,6 +84,32 @@ static int hex_nibble(char c){
     if(c>='A'&&c<='F') return c-'A'+10;
     return -1;
 }
+
+// Resolve an @file token to its hex content, or NULL if absent/malformed.
+// tok must be NUL-terminated (all call sites pass tmp copies). Bounded scan.
+static const char *file_arg(const char *tok){
+    if(!tok || tok[0]!='@' || !tok[1]) return NULL;
+#ifdef BRIDGE
+    (void)tok;
+    return NULL;
+#else
+    const char *want=tok+1;
+    size_t off=0;
+    while(off<FILE_BUF_SIZE && file_buf[off]){
+        size_t nl=0;
+        while(off+nl<FILE_BUF_SIZE && file_buf[off+nl]) nl++;
+        if(off+nl>=FILE_BUF_SIZE) return NULL; // unterminated name
+        size_t ho=off+nl+1;
+        if(ho>=FILE_BUF_SIZE) return NULL;
+        size_t hl=0;
+        while(ho+hl<FILE_BUF_SIZE && file_buf[ho+hl]) hl++;
+        if(ho+hl>=FILE_BUF_SIZE) return NULL; // unterminated content
+        if(strcmp(file_buf+off,want)==0) return file_buf+ho;
+        off=ho+hl+1;
+    }
+    return NULL;
+#endif
+}
 static int parse_hex_fixed(const char *s, uint8_t *out, int out_len){
     while(isspace((unsigned char)*s)) s++;
     if(s[0]=='0'&&(s[1]=='x'||s[1]=='X')) s+=2;
@@ -107,6 +144,7 @@ static void handle_keccak(const char *arg){
     while(isspace((unsigned char)*s)) s++;
     char *e=s+strlen(s);
     while(e>s && isspace((unsigned char)e[-1])){ e--; *e=0; }
+    if(s[0]=='@'){ const char *f=file_arg(s); if(!f){ put_str("error (no file)\n"); return; } s=(char*)f; }
     uint8_t data[2048];
     size_t dlen=0;
     if(s[0]=='0' && (s[1]=='x'||s[1]=='X')){
@@ -160,6 +198,7 @@ static void handle_encode(const char *arg){
     if(abi_parse_sig(sig, name,sizeof(name), types, &ntypes, errb,sizeof(errb))!=0){ put_str("error (bad sig)\n"); return; }
     const char *arg_ptrs[16];
     char arg_bufs[16][256];
+    int arg_quoted[16]={0};
     if(ntypes>0){
         int idx=0;
         char *p=rest;
@@ -168,6 +207,7 @@ static void handle_encode(const char *arg){
             if(!*p) break;
             char buf[256]; int bi=0;
             if(*p=='"'||*p=='\''){
+                arg_quoted[idx]=1;
                 char q=*p++; while(*p && *p!=q && bi<255){ buf[bi++]=*p++; }
                 if(bi==255 && *p!=q){ put_str("error (arg too long)\n"); return; }
                 if(*p==q) p++; buf[bi]=0;
@@ -195,6 +235,12 @@ static void handle_encode(const char *arg){
         while(isspace((unsigned char)*p) || *p==',') p++;
         if(*p){ put_str("error (arg count)\n"); return; }
         for(int i=0;i<ntypes;i++) arg_ptrs[i]=arg_bufs[i];
+        for(int i=0;i<ntypes;i++){
+            if(arg_quoted[i] || arg_ptrs[i][0]!='@') continue;
+            const char *f=file_arg(arg_ptrs[i]);
+            if(!f){ put_str("error (no file)\n"); return; }
+            arg_ptrs[i]=f;
+        }
     } else {
         // Zero-arg call: the line must end after the sig.
         char *q=rest;
@@ -224,6 +270,7 @@ static void handle_decode(const char *arg){
     char *types=s;
     char *hexd=last_space+1;
     while(isspace((unsigned char)*hexd)) hexd++;
+    if(hexd[0]=='@'){ const char *f=file_arg(hexd); if(!f){ put_str("error (no file)\n"); return; } hexd=(char*)f; }
     char out_lines[4096]; char errb[128];
     if(abi_decode(types, hexd, out_lines, sizeof(out_lines), errb,sizeof(errb))!=0){ put_str("error ("); put_str(errb); put_str(")\n"); return; }
     put_str(out_lines);
@@ -466,6 +513,12 @@ static void handle_create2(const char *arg){
     }
     while(isspace((unsigned char)*p) || *p==',') p++;
     if(nt!=3 || *p){ put_str("error (bad create2)\n"); return; }
+    for(int i=0;i<3;i++){
+        if(tokens[i][0]!='@') continue;
+        const char *f=file_arg(tokens[i]);
+        if(!f){ put_str("error (no file)\n"); return; }
+        tokens[i]=(char*)f;
+    }
     uint8_t deployer[20], salt[32], initcodehash[32];
     if(parse_hex_fixed(tokens[0], deployer,20)!=0 || parse_hex_fixed(tokens[1], salt,32)!=0 || parse_hex_fixed(tokens[2], initcodehash,32)!=0){
         put_str("error (bad hex)\n"); return;
@@ -534,6 +587,7 @@ static void handle_run(const char *arg){
         fixture=builtin_erc20_fixture; fixture_len=builtin_erc20_fixture_len;
     }
 
+    if(cdstr[0]=='@'){ const char *f=file_arg(cdstr); if(!f){ put_str("error (no file)\n"); return; } cdstr=f; }
     const char *hx=cdstr;
     if(hx[0]=='0'&&(hx[1]=='x'||hx[1]=='X')) hx+=2;
     size_t hl=strlen(hx);

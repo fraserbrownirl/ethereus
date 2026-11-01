@@ -43,24 +43,54 @@ except ImportError:  # pragma: no cover
 ELF = Path(__file__).parents[2] / "tests" / "data" / "rv" / "eth.elf"
 BRIDGE_ELF = Path(__file__).parents[2] / "tests" / "data" / "rv" / "eth-bridge.elf"
 ETH_IN, ETH_IN_SIZE = 0x100, 2048
+FILE_BUF, FILE_BUF_SIZE = 0x900, 4096
 
 OPS = ["keccak", "u256"]
 ALL_OPS = ["keccak", "u256", "selector", "encode", "decode", "create", "create2", "run"]
+
+def _poke(m: ref.Machine, base: int, b: bytes):
+    for i, x in enumerate(b):
+        a = base + i
+        w = a >> 2
+        m.ram[w] = m.ram[w] & ~(0xFF << 8 * (a & 3)) | x << 8 * (a & 3)
+
 
 def machine(cmd: str, path=ELF) -> ref.Machine:
     """The non-bridge firmware's snapshot with the cmd line in eth_in (cf calc.py)."""
     m = ref.Machine.from_program(elfmod.program(path))
     b = cmd.encode() + b"\0"
     assert len(b) <= ETH_IN_SIZE, f"cmd too long for eth_in: {len(b)}"
-    for i, x in enumerate(b):
-        a = ETH_IN + i
-        w = a >> 2
-        m.ram[w] = m.ram[w] & ~(0xFF << 8 * (a & 3)) | x << 8 * (a & 3)
+    _poke(m, ETH_IN, b)
     return m
 
 
 def run(cmd: str, path=ELF) -> tuple[str, list[int]]:
     m = machine(cmd, path)
+    toks = m.run(3 * 10**6)
+    assert m.halted and m.fault is None, (cmd, m.fault, m.out)
+    return m.out.decode(), toks
+
+
+def machine_with_files(cmd: str, files: dict[str, str], path=ELF) -> ref.Machine:
+    """machine() plus bridge-resolved @file args poked into file_buf.
+
+    files maps name -> hex content; written as name\\0hex\\0 pairs plus a
+    final NUL. Large arguments never go through the token window (same
+    mechanism as the API gateway's spill).
+    """
+    m = machine(cmd, path)
+    blob = b""
+    for name, content in files.items():
+        assert "\0" not in name and "\0" not in content
+        blob += name.encode() + b"\0" + content.encode() + b"\0"
+    blob += b"\0"
+    assert len(blob) <= FILE_BUF_SIZE, f"files too big: {len(blob)}"
+    _poke(m, FILE_BUF, blob)
+    return m
+
+
+def run_with_files(cmd: str, files: dict[str, str], path=ELF) -> tuple[str, list[int]]:
+    m = machine_with_files(cmd, files, path)
     toks = m.run(3 * 10**6)
     assert m.halted and m.fault is None, (cmd, m.fault, m.out)
     return m.out.decode(), toks
