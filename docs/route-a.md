@@ -176,6 +176,8 @@ Smoke reading: `list` returns the right 16 files. The model often answers from m
 
 ## 3. Baseline eval (Task 3)
 
+**Base, all 37 Internet tasks (2026-11-01): 6 of 37 passed.** The 7 mainnet-fork tasks scored 0 in all 14 trials (`results/internet-fork-base`). Of those 14, 9 ran normally, 3 hit the 45-minute agent limit, and both `swap-page` trials were killed at about five minutes when OpenCode reached its container's roughly 4 GB memory limit (kernel log on the VM). That limit is the task's own and is unchanged. The fork works: the verifier read real chain balances (`verifier/chain-evidence.json`).
+
 **Base with the judged batch (2026-11-01): 6 of 30 tasks scored, the same 6 passes as below; the 7 tasks in the judged and rerun batch all scored 0.** Source: `results/internet-rest-base`. `voting-page` has one scored attempt; the other's judge reply did not parse. The 7 fork tasks are pending.
 
 **Current base result, partial (2026-11-01): Internet, stock Qwen3.5-9B through `serve.py`, thinking off, greedy: 12 of 46 scored trials passed, on 23 of the 24 tasks that need neither the grader key nor an RPC.** Source: `results/internet-nokey-base` and `results/internet-nokey-base-capped` on VM 58642243. Each task ran 2 attempts, which repeat exactly under greedy decoding, so this is 6 of 23 tasks. `signatures-permit2-witness-string` has no score: its first run looped on one `grep` for 189 calls and was stopped, then both limited attempts hit `AgentSetupTimeoutError`; to be rerun. 13 tasks wait on Fraser's RPC URL and Anthropic key. The table below is the earlier plan.
