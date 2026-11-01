@@ -15,7 +15,7 @@ Single list for the core repo and Route A; the Cursor agent and Muse are retired
 | Malformed-input fuzz per command in gate 1, must give `error (...)` | done | | 2026-11-01 | 2026-11-01 | no crash; 6 lenient forms go with the spill fix |
 | `eth_in` firmware change, its gate 4, the spec's spill test | running | Source on branch `spill-eth-in`, not merged; gate 1 there running. Merge, gate 4 and spill test wait for the 37 tasks and the before test (Fraser) | 2026-11-01 | | |
 | Ethereus test, after the spill fix | queued | Needs the spill fix | | | |
-| Regenerate `run` and calldata fine-tune families with real addresses | running | On branch `spill-eth-in`, reference machine only | 2026-11-01 | | |
+| Regenerate `run` and calldata fine-tune families with real addresses | done | On branch `spill-eth-in`; regenerate if the firmware changes again | 2026-11-01 | 2026-11-01 | 763 spilled rows, all match an independent check; 56 create2 rows |
 | GPU test of `serve.py` store support | queued | Needs the GPU after the eval batches | | | |
 | +Skills arm on `q9-store-rv` | queued | Needs the GPU after the eval batches | | | |
 | 4B evals on a rented L4, up to $0.50/h | queued | After the 9B evals | | | |
