@@ -12,11 +12,13 @@ Single list for the core repo and Route A, since the Cursor agent and Muse are r
 
 ## Now
 
-1. Serve test rerun on `d3fd855` code: passes only with replay clean on all three traces. Step 3 stays open until then.
-2. Harness VM 58640793: confirm Docker runs. Install uv and the harness at the same commit as the box (`cc3daaf`), and record it.
-3. Route from the VM to the box's `serve.py`, because the box cannot run Docker. Base on port 8000, `q9-rv2` on 8001, one at a time if VRAM needs it.
-4. One Internet trial on base, end to end, then one on Ethereus. Record provider config and web search setup in `docs/ethevals-submission.md`.
-5. Internet on the 28 no-key tasks, default attempts, both arms. Trajectories in `route-a/trajectories/<arm>/internet/`.
+1. Serve test: final three-call run, replay clean on all three traces.
+2. Eval VM from offer 56403068, one box: model, `serve.py` and harness on localhost. Confirm GPU, Docker, and CUDA for the pinned torch.
+3. Pinned venv there; lock file committed; torch version recorded in `docs/route-a.md`.
+4. Download base 9B, merge, rerun gates 1, 2 on fla, 3, 4 there on the venv and ELF `b320d31b`.
+5. Once verified, stop 58623317 and 58640793. Move the grader's API key by relay, without reading it.
+6. One Internet trial per arm end to end. Record provider config and web search setup in `docs/ethevals-submission.md`.
+7. Internet, both arms, the 28 no-key tasks, then the 9 judged. Default attempts. Trajectories in `route-a/trajectories/<arm>/internet/`.
 
 ## Then
 
@@ -25,7 +27,3 @@ Single list for the core repo and Route A, since the Cursor agent and Muse are r
 8. 4B evals on a rented L4, up to $0.50/h, once the 9B evals are running.
 9. After both eval configurations finish: `eth_in` firmware change, its gate 4, the spec's spill test.
 10. `docs/ethevals-submission.md` final draft.
-
-## Waiting on Fraser
-
-- Whether to supply `ANTHROPIC_API_KEY` for the 9 judged tasks.
