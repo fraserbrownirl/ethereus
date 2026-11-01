@@ -12,7 +12,8 @@ are not streamed.
     ETHEREUS_KEYS=key1,key2 uvicorn --factory chipformer.rv.serve:from_env --port 8001
 
 Env: MODEL, FIRMWARE, SNAPSHOT (optional), ETHEREUS_DATA (default ./serve-data), CAPTURE_HMAC_KEY,
-ETHEREUS_SYNC_SECONDS, ETHEREUS_BUFFERED_STREAM=1, ETHEREUS_BASE=1 (stock checkpoint, no circuit).
+ETHEREUS_SYNC_SECONDS, ETHEREUS_BUFFERED_STREAM=1, ETHEREUS_BASE=1 (stock checkpoint, no circuit),
+ETHEREUS_SYSTEM_LINE (the +Skills arm's one line about es/).
 """
 
 import hashlib
@@ -125,12 +126,21 @@ class Turn:
 class Engine:
     """One RvChat and its firmware, one generation at a time."""
 
-    def __init__(self, model: str, firmware: str, executor: bool = True) -> None:
-        from chipformer.rv.chat import RvChat
+    def __init__(self, model: str, firmware: str, executor: bool = True, snapshot=None,
+                 system_line: str | None = None) -> None:
+        from chipformer.rv.chat import RvChat, load_store_file
 
         self.chat = RvChat(model, executor=executor)
         self.firmware = Path(firmware)
         self.lock = threading.Lock()
+        self.system_line = system_line
+        self.store_tools: list[dict] = []
+        if getattr(self.chat, "store_cfg", None) is not None:  # a store checkpoint: +Skills
+            from chipformer.rv import store as ST
+
+            self.store_tools = list(ST.TOOLS)
+            if snapshot:
+                self.chat.store_snap = load_store_file(snapshot)
 
     def _encode(self, s: str) -> list[int]:
         return self.chat.T.tok.encode(s, add_special_tokens=False).ids
@@ -146,15 +156,21 @@ class Engine:
     def _run(self, messages, max_new, deadline, client_tools) -> Turn:
         chat, T = self.chat, self.chat.T
         decode = lambda g: T.tok.decode(self._visible(g), skip_special_tokens=False)
-        ours = {"eth"} if client_tools else None
-        client_tools = [t for t in client_tools if t.get("function", {}).get("name") != "eth"]
-        ids = chat.prompt_ids(messages, (ETH_TOOL, *client_tools))
+        mine = (ETH_TOOL, *self.store_tools)
+        names = {t["function"]["name"] for t in mine}
+        ours = names if client_tools else None
+        client_tools = [t for t in client_tools if t.get("function", {}).get("name") not in names]
+        if self.system_line:
+            messages = [{"role": "system", "content": self.system_line}, *messages]
+        ids = chat.prompt_ids(messages, (*mine, *client_tools))
         turn = Turn(prompt_tokens=len(ids))
         n0, files, must_close, left = len(ids), {}, False, max_new
         while True:
             fw = spill.firmware_with_files(self.firmware, files)
-            lock = BR.Session(T, spill.parked(fw))
-            lock.history(ids)
+            # The reference does not know a store loaded from a snapshot (chat.py: --memory)
+            lock = None if self.store_tools else BR.Session(T, spill.parked(fw))
+            if lock is not None:
+                lock.history(ids)
             watch = Watch(T, deadline, ours, decode)
             seg = {"prompt_ids": ids, "files": files}
             turn.segments.append(seg)
@@ -163,7 +179,7 @@ class Engine:
                                   on_token=watch)
             except ClientCall:
                 seg["gen_ids"] = watch.gen[:-1]  # the circuit never saw this </tool_call>
-                seg["owner_mask"] = lock.own[len(ids):]
+                seg["owner_mask"] = lock.own[len(ids):] if lock is not None else []
                 turn.client_call = parse_call(decode(watch.gen[watch.start:-1]), client_tools)
                 turn.finish_reason = "tool_calls"
                 visible = ids[n0:] + self._visible(watch.gen[:watch.start - 1])  # before <tool_call>
@@ -172,7 +188,7 @@ class Engine:
                 return turn
             except OverWindow:
                 seg["gen_ids"] = watch.gen[:-1]  # up to, not including, the </tool_call>
-                seg["owner_mask"] = lock.own[len(ids):]
+                seg["owner_mask"] = lock.own[len(ids):] if lock is not None else []
                 left -= len(self._visible(watch.gen))
                 head = self._visible(watch.gen[:watch.start])  # through <tool_call>
                 call = T.tok.decode(self._visible(watch.gen[watch.start:-1]),
@@ -187,7 +203,7 @@ class Engine:
                     ids = ids + head + self._encode(spill.call_text(new))
                 continue
             seg["gen_ids"] = r["tokens"]
-            seg["owner_mask"] = lock.own[len(ids):]
+            seg["owner_mask"] = lock.own[len(ids):] if lock is not None else []
             if must_close and (not r["tokens"] or r["tokens"][0] != T.TCC):
                 raise RuntimeError("spill: the model did not close the rewritten call")
             turn.lock_error = r["lock_error"]
@@ -532,7 +548,8 @@ def from_env():
     firmware = os.environ.get("FIRMWARE")
     keys = [k for k in os.environ.get("ETHEREUS_KEYS", "").split(",") if k]
     engine = (BaseEngine(os.environ["MODEL"]) if os.environ.get("ETHEREUS_BASE")
-              else Engine(os.environ["MODEL"], firmware, executor=True))
+              else Engine(os.environ["MODEL"], firmware, executor=True, snapshot=os.environ.get("SNAPSHOT"),
+                          system_line=os.environ.get("ETHEREUS_SYSTEM_LINE")))
     return create_app(engine, keys, os.environ.get("ETHEREUS_DATA", "serve-data"), firmware,
                       os.environ.get("SNAPSHOT"), os.environ.get("MODEL_ID", "ethereus"),
                       os.environ.get("CORE_COMMIT"),
