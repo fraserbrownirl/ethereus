@@ -149,7 +149,6 @@ ABI_ENCODE_VECTORS = [
      "0x70a082310000000000000000000000000000000000000000000000000000000000000001\n"),
     # zero-arg call is valid: selector only
     ("encode f()", "0x26121ff0\n"),
-    # short bytesN pads right, like eth_abi
 ]
 
 
