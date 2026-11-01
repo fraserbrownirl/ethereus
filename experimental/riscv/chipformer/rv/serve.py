@@ -247,8 +247,8 @@ class BaseEngine:
         enc = self.tok.apply_chat_template(messages, tools=list(client_tools) or None,
                                            add_generation_prompt=True, return_dict=True)
         ids = list(enc["input_ids"])
-        eos = list(self.model.generation_config.eos_token_id or [])
-        eos = eos if isinstance(eos, list) else [eos]
+        eos = self.model.generation_config.eos_token_id
+        eos = eos if isinstance(eos, list) else [] if eos is None else [eos]
         with self.lock, self.torch.no_grad():
             out = self.model.generate(self.torch.tensor([ids], device="cuda"), do_sample=False,
                                       max_new_tokens=max_new, eos_token_id=[*eos, self.tcc],
@@ -354,6 +354,10 @@ def create_app(engine, keys: list[str], data_dir, firmware=None, snapshot=None,
         def __init__(self, status, code, message, headers=None):
             self.status, self.code, self.message, self.headers = status, code, message, headers
 
+    @app.exception_handler(Exception)
+    async def _crash(_, e: Exception):
+        return JSONResponse({"error": {"code": "internal", "message": f"{type(e).__name__}: {e}"}}, 500)
+
     @app.exception_handler(ApiError)
     async def _api_error(_, e: ApiError):
         return JSONResponse({"error": {"code": e.code, "message": e.message}}, e.status, e.headers)
@@ -448,6 +452,9 @@ def create_app(engine, keys: list[str], data_dir, firmware=None, snapshot=None,
                     chunks = ['data: {"error": {"code": "use_async", "message": "over the limit"}}\n\n']
                 except ApiError as e:
                     chunks = [f"data: {json.dumps({'error': {'code': e.code, 'message': e.message}})}\n\n"]
+                except Exception as e:  # noqa: BLE001 - the client must see it, not an empty stream
+                    msg = f"{type(e).__name__}: {e}"
+                    chunks = [f"data: {json.dumps({'error': {'code': 'internal', 'message': msg}})}\n\n"]
                 for c in chunks:
                     yield c
 
