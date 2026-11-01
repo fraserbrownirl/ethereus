@@ -1527,7 +1527,11 @@ def cases(n: int, seed: int = 0, only: list[str] | None = None, stats: dict | No
 
 
 def boundary_cases():
-    """Every intN and uintN at min, max, max+1, min-1; every bytesN at N and N+1 bytes.
+    """Every intN and uintN at min, max, max+1, min-1, in decimal and in hex; every bytesN at N and N+1 bytes.
+
+    Hex ints are 256-bit two's complement, so a negative is sign-extended: int8's min is 0xff..80 and
+    min-1 is 0xff..7f. int256 fills all 64 digits, so its max+1 is its min and min-1 its max; its
+    out-of-range forms are 65 digits.
 
     Out of range must be an error, asserted and not compared. In range is compared with eth_abi
     directly, not with expected(). Never sized against the window: spill reaches past it."""
@@ -1542,6 +1546,21 @@ def boundary_cases():
             yield f"encode f({tp}) {hi}", ok(tp, hi)
             yield f"encode f({tp}) {hi + 1}", REJECT
             yield f"encode f({tp}) {lo - 1}", REJECT
+    for bits in range(8, 257, 8):
+        tp, hi = f"uint{bits}", 2**bits - 1
+        yield f"encode f({tp}) 0x0", ok(tp, 0)
+        yield f"encode f({tp}) {hi:#x}", ok(tp, hi)
+        yield f"encode f({tp}) {hi + 1:#x}", REJECT
+        yield f"encode f({tp}) -0x1", REJECT
+        tp, hi, lo = f"int{bits}", 2 ** (bits - 1) - 1, -(2 ** (bits - 1))
+        yield f"encode f({tp}) {hi:#x}", ok(tp, hi)
+        yield f"encode f({tp}) {2**256 + lo:#x}", ok(tp, lo)
+        if bits == 256:
+            yield f"encode f({tp}) {2**256:#x}", REJECT
+            yield f"encode f({tp}) {2**256 + 2**255:#x}", REJECT
+        else:
+            yield f"encode f({tp}) {hi + 1:#x}", REJECT
+            yield f"encode f({tp}) {2**256 + lo - 1:#x}", REJECT
     for n in range(1, 33):
         tp = f"bytes{n}"
         yield f"encode f({tp}) 0x{'ab' * n}", ok(tp, b"\xab" * n)

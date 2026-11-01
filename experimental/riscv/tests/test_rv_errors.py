@@ -121,11 +121,12 @@ def test_integer_boundaries_agree_with_the_oracle(cmd):
 
 def test_boundary_slice_covers_every_width():
     cases = list(eth.boundary_cases())
-    assert len(cases) == 32 * 2 * 4 + 32 * 2
-    assert sum(w == eth.REJECT for _, w in cases) == 32 * 2 * 2 + 32
+    assert len(cases) == 32 * 2 * 4 * 2 + 32 * 2
+    assert sum(w == eth.REJECT for _, w in cases) == 32 * 2 * 2 * 2 + 32
     for w in (8, 128, 256):
         for t in ("int", "uint"):
-            assert sum(c.startswith(f"encode f({t}{w}) ") for c, _ in cases) == 4
+            assert sum(c.startswith(f"encode f({t}{w}) ") for c, _ in cases) == 8
+            assert sum(c.startswith(f"encode f({t}{w}) ") and ("0x" in c) for c, _ in cases) == 4
 
 
 def test_boundary_slice_on_the_firmware():
