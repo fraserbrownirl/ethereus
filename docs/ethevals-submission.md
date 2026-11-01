@@ -1,6 +1,6 @@
 # ETH Evals submission (draft)
 
-Status: configuration recorded before the runs. No scores yet; every number here will come from a run, with its source file. Nothing has been submitted or published.
+Status: partial scores below, fork batch outstanding; every number here comes from a run, with its source file. Nothing has been submitted or published.
 
 ## Decisions
 
@@ -53,3 +53,13 @@ In all 9 held tasks the key is in `[verifier.env]`, no agent or environment sect
 ## Results
 
 None yet.
+
+Internet, 9B, through 2026-11-01 17:30 UTC, before the 7 mainnet-fork tasks:
+
+| Arm | Tasks scored | Tasks passed | Source on the eval VM |
+|---|---|---|---|
+| Base | 30 | 6 | `results/internet-nokey-base`, `results/internet-rest-base` |
+| Ethereus | 30 | 6 | `results/internet-nokey-rv2`, `results/internet-rest-rv2` |
+
+Both arms pass the same 6 tasks. The circuit ran in no trial, so this does not yet measure the circuit. In the base judged batch one `voting-page` trial has no score (`RewardFileNotFoundError`), and three trials hit the agent timeout.
+

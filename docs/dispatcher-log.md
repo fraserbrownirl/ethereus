@@ -40,4 +40,6 @@ One line per tick: time (UTC), what changed. Spend is omitted because Fraser mon
 - Environment pin: `ENV_PIN OK` on the VM, tampered lock reads DRIFT. `dist/q9-rv2/env-pin.json` on the VM. Canary script refuses while a server holds the GPU; no run yet.
 - Fraser: inputs the firmware rejects by design are asserted as errors, not compared. Now rule 5. On the branch these go through `ByDesign`/`REJECT`, and `keccak @name` with no file joined them after a 200-case gate found it.
 - Branch `spill-eth-in`, worktree `~/Dev/ethereus-spill`: bridge prefers `eth_in`, `serve.py` interrupts only calls it can move, `SPILL_ON_GPU` on. Bridge ELF there is not b320d31b and stays off main until the freeze lifts. Full gate 1 running: `docs/logs/gate1-spill.log` in that worktree.
-
+- 2026-11-01 17:40 Circuit judged batch: 0 of 7 tasks, 0 of 14 trials, no errors (`results/internet-rest-rv2`). Totals: base 6 of 30, circuit 6 of 30, same passes. Fork batch started on base. Judge spend read as $5.45, which may count duplicates (`/tmp/j.py`).
+- 2026-11-01 17:40 Correction to my own read: the one circuit run in the rv2 traces is my server check at 12:08:39, not a trial. The circuit has run in no eval trial.
+- 2026-11-01 17:40 Spill branch gate 1: 10,910 cases, 0 mismatches, 6 by-design rejects asserted (`docs/logs/gate1-spill.log` on `spill-eth-in`). Full suite 306 passed, 2 failed, both stale tests; those two files then 93 of 93.
