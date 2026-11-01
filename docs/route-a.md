@@ -194,6 +194,8 @@ Smoke reading: `list` returns the right 16 files. The model often answers from m
 
 ## 4. Ethereus eval (Task 4)
 
+**Circuit with the judged batch (2026-11-01): 6 of 30 tasks scored, the same 6 passes as base; the 7 tasks in the judged and rerun batch all scored 0, in all 14 trials, with no errors.** The circuit ran in no eval trial: of 367 requests with `eth` offered, one has a circuit run, and that is the server check `Use eth: what is the selector of transfer(address,uint256)?` at 12:08:39, before the first trial. So this arm has not yet shown a difference from base. Sources on the VM: `results/internet-rest-rv2`, `results/internet-nokey-rv2`, `serve-data/rv2/traces/`. The fork batch of 7 tasks is still to come.
+
 **Current circuit result (2026-11-01): Internet, `dist/q9-rv2` through `serve.py`, `eth` offered beside OpenCode's tools: 12 of 48 trials passed, 6 of 24 tasks that need neither the grader key nor an RPC.** Source: `results/internet-nokey-rv2` on VM 58642243. Same 6 tasks as base, and every task scored the same on both arms; `signatures-permit2-witness-string` is unscored on base, pending rerun. **The circuit did not run in any of these trials:** of 133 server requests, the one that ran it was a manual test. So this row measures base Qwen with one extra tool on offer, not the circuit's effect. The table below is the earlier plan.
 
 
