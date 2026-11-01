@@ -128,7 +128,7 @@ class Engine:
 
     def __init__(self, model: str, firmware: str, executor: bool = True, snapshot=None,
                  system_line: str | None = None) -> None:
-        from chipformer.rv.chat import RvChat, load_store_file
+        from chipformer.rv.chat import RvChat
 
         self.chat = RvChat(model, executor=executor)
         self.firmware = Path(firmware)
@@ -140,6 +140,8 @@ class Engine:
 
             self.store_tools = list(ST.TOOLS)
             if snapshot:
+                from chipformer.rv.chat import load_store_file
+
                 self.chat.store_snap = load_store_file(snapshot)
 
     def _encode(self, s: str) -> list[int]:
