@@ -199,7 +199,7 @@ fuzz.
 | op (via @file) | cases | oracle | instr avg |
 | --- | --- | --- | --- |
 | decode (uint256,bytes≤800,address,bytes,bool) | 200 | eth_abi | 57,408 |
-| create2 (full 32 B salt + hash) | 200 | eth_utils | 29,027 |
+| create2 (full 32 B salt + hash) | 200 | eth_hash | 29,027 |
 | run erc20 (transfer/transferFrom/approve + 64–400 B pad) | 200 | py-evm | 117,148 |
 
 Run cases vary sender (alice/spender, so transferFrom covers both the
@@ -216,6 +216,36 @@ model never sees full file bytes in-window except through the spill.
 The spec's test (`eth decode` with 10 words and `eth run erc20` with real calldata, both `spilled: true`, through the worker) is not met. GPU spill is off (`serve.SPILL_ON_GPU`): the first run returned a lock error right after `GO`, because `core.snapshot` resets the circuit's capture state, so a re-prefilled call is not captured. Over-window calls get the firmware's exact `error (too long)`. The reference-machine path passes (`tests/test_rv_filebuf.py`, `tests/test_rv_spill.py`).
 
 Agreed plan (Fraser): no ELF change until both eval configurations have finished on `b320d31b`. Then the host writes the rewritten command into `eth_in` and the firmware prefers it, followed by its own gate 4 and a rerun of this test.
+
+## Oracle per command
+
+What gate 1 compares each command against, from `chipformer/rv/eth.py`.
+
+| command | oracle | source |
+| --- | --- | --- |
+| keccak | eth_hash | `expected_keccak` |
+| u256 | Python integers, mirroring the firmware's grammar | `expected_u256` |
+| selector | eth_hash | `expected_selector` |
+| encode | eth_abi | `expected_encode` |
+| decode | eth_abi | `expected_decode` |
+| create | rlp + eth_hash | `expected_create` |
+| create2 | eth_hash | `expected_create2` |
+| run | py-evm | `tests/evm_oracle.py` |
+
+## Run calls and the 80-token window (measured 2026-11-01)
+
+Qwen spends one token per digit, so zero-padded words and all-digit addresses overflow the window. Only calls with no address argument fit. Reproduce with `scripts/bench_window.py`.
+
+| call | tokens | fits 80 |
+| --- | --- | --- |
+| run totalSupply() | 36 | yes |
+| run decimals() | 37 | yes |
+| run balanceOf(alice) | 102 | no |
+| run allowance(alice,spender) | 163 | no |
+| run transfer(bob,100) | 164 | no |
+| run approve(spender,50) | 165 | no |
+| run transferFrom (revert) | 229 | no |
+| run getAmountOut(1000,50000,60000) | 226 | no |
 
 ## Probe table (non-bridge, exact counts)
 

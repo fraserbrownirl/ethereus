@@ -121,6 +121,18 @@ def h(p):
 R = "experimental/riscv/"
 out["hashes"] = {"route-a checkout": {n: h(f"/workspace/ethereus/{R}{p}") for n, p in ARTIFACTS.items()},
                  "main checkout": {n: h(f"/workspace/ethereus-main/{R}{p}") for n, p in ARTIFACTS.items()}}
+out["gate_times"] = {}
+_g = "/workspace/ethereus/dist/q9-rv2/gate4-keep1"
+if os.path.exists(_g + "/gate4.log"):
+    for line in open(_g + "/gate4.log", errors="replace"):
+        if not line.startswith('{"prompt"'): continue
+        r = json.loads(line)
+        chat = open(f"{_g}/chat-{r['prompt']}.log", errors="replace").read()
+        m = re.search(r"<parameter=cmd>\n(\S+)(?: (\S+) (\S+))?", chat)
+        if not m: continue
+        name = m[1]
+        if name == "run" and m[3] and m[3].startswith("0x70a08231"): name = "run balanceOf(alice)"
+        out["gate_times"].setdefault(name, {"seconds": r["seconds"], "chip_seconds": r["chip_seconds"]})
 out["gpu"] = sh("nvidia-smi --query-gpu=memory.used,memory.total,utilization.gpu --format=csv,noheader")
 for tag in ("before", "after"):
     f = f"/workspace/results/ethereus-test/{tag}/summary.txt"
@@ -253,10 +265,6 @@ def activity(data):
 
 
 BENCH = REPO / "experimental/riscv/docs/eth-bench.md"
-ORACLES = {"keccak": "eth_hash", "u256": "Python integers", "selector": "eth_hash", "encode": "eth_abi", "decode": "eth_abi",
-           "create": "eth_utils", "create2": "eth_utils", "run": "py-evm"}
-
-
 def bench_tables():
     """[(section heading, column names, rows, section text)] from eth-bench.md, in file order."""
     out, head, text, cols, rows = [], "", "", None, []
@@ -286,13 +294,26 @@ def bench_tables():
     return out, sections
 
 
-def fw_commands():
+def fw_commands(data):
     tables, sections = bench_tables()
-    rows, over = [], {}
+    rows, over, oracle, run_fit = [], {}, {}, {}
     for head, cols, rs in tables:
         if "over-80-tokens" in cols:
             for r in rs:
                 over[r["op"]] = r["over-80-tokens"]
+        if "oracle" in cols and "command" in cols:
+            oracle = {r["command"]: r["oracle"] for r in rs}
+        if "fits 80" in cols:
+            run_fit = {r["call"]: r for r in rs}
+    live = (data or {}).get("gate_times", {})
+
+    def secs(name):
+        t = live.get(name)
+        return f"{t['seconds']} total, {t['chip_seconds']} in circuit" if t else "not measured here"
+
+    def run_window(name):
+        r = run_fit.get(name)
+        return (f"over: {r['tokens']} tokens" if r["fits 80"] == "no" else "no") if r else U
     spill_on = re.search(r"^SPILL_ON_GPU = (\w+)", (REPO / "experimental/riscv/chipformer/rv/serve.py").read_text(), re.M)
     spill_on = spill_on[1] if spill_on else U
     def mism(head):
@@ -308,14 +329,15 @@ def fw_commands():
                 wb = over.get(r["op"], "")
                 n = r["cases"]
                 st = state if n != "0" else "PASS inline untested: window-starved; covered via @file"
-                rows.append([r["op"], st, ORACLES.get(r["op"], U), n, mism(head), r["instr/call"], r.get("~wall", U), wb if wb and not wb.startswith("0") else "no", date])
+                rows.append([r["op"], st, oracle.get(r["op"], U), n, mism(head), r["instr/call"], secs(r["op"]), wb if wb and not wb.startswith("0") else "no", date])
         elif "EVM gas" in cols:
             for r in rs:
-                rows.append(["run " + r["call"], state, "py-evm", "12 (all calls)", mism(head), r["instr/call"], r.get("~wall", U), U, date])
+                name = "run " + r["call"]
+                rows.append([name, state, oracle.get("run", U), "12 (all calls)", mism(head), r["instr/call"], secs(name), run_window(name), date])
         elif "via @file" in " ".join(cols):
             for r in rs:
-                rows.append([r[cols[0]] + " via @file", state, r["oracle"], r["cases"], mism(head), r["instr avg"], U, "bypasses it, reference only", date])
-    h = ["Command", "State", "Oracle", "Cases", "Mismatches", "Instr/call", "~Wall (L4, bench)", "Window-bound (over 80 tokens)", "Date"]
+                rows.append([r[cols[0]] + " via @file", state, r["oracle"], r["cases"], mism(head), r["instr avg"], "not measured here", "bypasses it, reference only", date])
+    h = ["Command", "State", "Oracle", "Cases", "Mismatches", "Instr/call", "Seconds on this VM (gate 4)", "Window-bound (over 80 tokens)", "Date"]
     o = ["<table><tr>" + "".join(f"<th>{x}</th>" for x in h) + "<th>GPU</th></tr>"]
     for r in rows:
         gpu = "ok"
@@ -398,16 +420,40 @@ def fw_limits():
         limit = f"{lim:,} {unit}" if lim else U
         use = f"{u:,} ({100 * u / lim:.0f}%)" if u is not None and lim else ("n/a" if u is None and unit == "tokens" else U)
         return f"<tr><td>{name}</td><td>{limit}</td><td>{use}</td></tr>"
+    store = (REPO / "experimental/riscv/chipformer/rv/store.py").read_text()
+
+    def const(pat):
+        m = re.search(pat, store, re.M)
+        return int(m[1]) if m else None
+
+    chunks, names, cmax, nmax = (const(r"n_chunks: int = (\d+)"), const(r"n_names: int = (\d+)"), const(r"^CMAX = (\d+)"), const(r"^NMAX = (\d+)"))
+    try:
+        man = json.loads((REPO / "experimental/riscv/build/ethskills.manifest.json").read_text())
+    except Exception:
+        man = {}
+
+    def srow(name, lim, u):
+        limit = f"{lim:,}" if lim else U
+        pct = f" ({100 * u / lim:.0f}%)" if isinstance(u, int) and lim else ""
+        return f"<tr><td>{name}</td><td>{limit}</td><td>{f'{u:,}' if isinstance(u, int) else u}{pct}</td></tr>"
+
     return ("<table><tr><th>Fixed limit</th><th>Size</th><th>eth-bridge.elf uses</th></tr>"
             + row("Tool-call capture window", int(cap[1]) if cap else None, None, "tokens")
             + row("RAM", words("RAM"), ram) + row("ROM (code)", words("ROM"), used.get(".text", (None,))[0])
             + row("DROM (read-only data)", words("DROM"), used.get(".rodata", (None,))[0])
-            + "</table><p class='f'>From spec.py and riscv64-elf-size on main's ELF. RAM use is the end of .bss; the stack also needs room below the top of RAM.</p>")
+            + "</table><p class='f'>From spec.py and riscv64-elf-size on main's ELF. RAM use is the end of .bss; the stack also needs room below the top of RAM.</p>"
+            + "<table><tr><th>Store limit</th><th>Size</th><th>ethskills snapshot uses</th></tr>"
+            + srow("Files", names, len(man["files"]) if man.get("files") else U)
+            + srow("Text capacity, tokens (chunks x tokens per chunk)", chunks * cmax if chunks and cmax else None, man.get("total_tokens", U))
+            + srow("Pack budget, tokens", man.get("budget"), man.get("total_tokens", U))
+            + srow("Tokens per put or append", cmax, max((len(p) for f in man.get("files", []) for p in f["pieces"]), default=U))
+            + srow("Tokens in a name, including its newline", nmax, "names measured by pack_skills: within limit" if man else U)
+            + "</table><p class='f'>From store.py and build/ethskills.manifest.json.</p>")
 
 
 def firmware(data):
     try:
-        cmds, tables, sections = fw_commands()
+        cmds, tables, sections = fw_commands(data)
         return (cmds + "<h3>Artifacts</h3>" + fw_artifacts(data) + "<h3>Instruction counts over time</h3>" + fw_trend(tables, sections)
                 + "<h3>Fixed limits</h3>" + fw_limits())
     except Exception as e:
