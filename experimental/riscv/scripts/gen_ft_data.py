@@ -3,7 +3,10 @@
 
 Every tool response comes from running the reference machine and the reference store, never typed.
 Each example is a full chat plus token segments: `train` is true only for tokens the model generates,
-so the circuit's output carries no loss. Calls over the 80-token window are rejected, not truncated.
+so the circuit's output carries no loss. A call over the 80-token window runs as serve.py runs it:
+long hex arguments move to the file buffer and the command to eth_in. Such a row trains the final
+answer against the rewritten history, and its call_segments train the full call up to </tool_call>.
+Calls the host cannot move are rejected, not truncated.
 
     python scripts/gen_ft_data.py [--scale 1.0] [--workers N] [--out data/ft1]
 
@@ -36,6 +39,7 @@ BUILTINS = json.loads((RV / "tests/data/rv/eth.builtins.json").read_text())
 A, B, S = (BUILTINS[k] for k in ("alice", "bob", "spender"))
 SEED = 20261101
 MAX_LEN = 8192  # the spec says 4096, but real OpenCode prompts alone are about 7,400 tokens
+MAX_LEN_OPENCODE_KNOWLEDGE = 12288  # a file body on top of that prompt; kept so these examples are not all plain
 SYSTEM = json.loads(SMOKE.read_text())["system_line"]
 COUNTS = {"abi": 800, "u256": 400, "create": 200, "run": 400, "files": 600, "negative": 594, "knowledge": 500}
 TOOLS = [ETH_TOOL, *ST.TOOLS]
@@ -135,17 +139,16 @@ def create(r):
         q = r.choice([f"What address does {d} deploy to at nonce {n}?",
                       f"Compute the CREATE address for deployer {d}, nonce {n}."])
         return q, [f"create {d} {n}"], lambda o: f"The contract address is `{o[0]}`."
-    salt, h = r.randint(0, 9999), "0x" + r.randbytes(32).hex()
+    salt, h = "0x" + word(r.randint(0, 9999)), "0x" + r.randbytes(32).hex()  # both must be 32 bytes
     q = f"Compute the CREATE2 address for deployer {d}, salt {salt}, init code hash {h}."
     return q, [f"create2 {d} {salt} {h}"], lambda o: f"The CREATE2 address is `{o[0]}`."
 
 
 def run(r):
-    """Calls on the built-in contracts' fixed state. Random addresses are valid: they hold 0 there."""
-    # Qwen spends a token per digit, so zero-padded words and digit-heavy addresses overflow the 80-token
-    # window: balanceOf(alice) takes 102. Letter-heavy addresses fit, and hold 0 on the fixture.
-    who = "0x" + "".join(r.choice("abcdefabcdef0123") for _ in range(40))
-    k = r.choice(["balance"] * 8 + ["supply", "decimals"])
+    """Calls on the built-in contracts' fixed state, with real addresses: alice, bob and the spender hold
+    state, random ones hold 0. Most calldata is over the window, so most of these rows spill."""
+    who = addr(r, 0.6)
+    k = r.choice(["balance"] * 4 + ["allowance"] * 2 + ["transfer", "approve", "supply", "decimals", "amm"])
 
     def ret(o):
         return o[-1].splitlines()[0] if o[-1].startswith("0x") else o[-1]
@@ -303,8 +306,8 @@ def init():
     G["kpool"] = knowledge_pool()
 
 
-def session():
-    return ST.StoreSession(G["T"], spill.parked(FW), G["cfg"], G["dev"])
+def session(fw=FW):
+    return ST.StoreSession(G["T"], spill.parked(fw), G["cfg"], G["dev"])
 
 
 def enc(text):
@@ -344,16 +347,25 @@ def finish(meta, user, steps, answer, r, plain=False):
     """steps: [(openai call, call ids, response ids)]. Builds the record with per-token loss flags."""
     ids, msgs, variant, names = prompt_ids(user, r, plain)
     segs = [{"role": "prompt", "train": False, "ids": ids}]
-    for call, cids, resp in steps:
-        segs.append({"role": "assistant_call", "train": True, "ids": cids})
+    call_segments = None
+    for call, cids, resp, *full in steps:
+        if full:  # serve.py: the model writes the full call, then the history holds the rewritten one
+            call_segments = [*segs, {"role": "assistant_call", "train": True, "ids": full[0]}]
+            segs.append({"role": "spill_prefill", "train": False, "ids": cids[:-1]})
+            segs.append({"role": "assistant_call", "train": True, "ids": cids[-1:]})
+        else:
+            segs.append({"role": "assistant_call", "train": True, "ids": cids})
         segs.append({"role": "tool_output", "train": False, "ids": resp})
         msgs.append({"role": "assistant", "content": "", "tool_calls": [{"type": "function", "function": call}]})
         msgs.append({"role": "tool", "content": tool_text(resp)})
     segs.append({"role": "assistant_final", "train": True, "ids": enc(answer) + [IM_END]})
     msgs.append({"role": "assistant", "content": answer})
     total = sum(len(s["ids"]) for s in segs)
-    if total > MAX_LEN:
+    knowledge = meta["family"] in ("files", "knowledge") and variant != "plain"
+    if total > (MAX_LEN_OPENCODE_KNOWLEDGE if knowledge else MAX_LEN):
         return None, "over_max_len"
+    if call_segments:
+        meta = {**meta, "spilled": True, "call_segments": call_segments}
     return {**meta, "messages": msgs, "prompt_variant": variant, "tools": names, "n_tokens": total, "segments": segs}, None
 
 
@@ -380,14 +392,21 @@ def make(job):
         ses, steps, outs = session(), [], []
         for cmd in cmds:
             cids = [T.TCO] + enc(spill.call_text(cmd)) + [T.TCC]
+            full = []
             if len(cids) - 2 > spill.WINDOW:
-                return None, "over_window"
+                new, files = spill.rewrite(cmd, lambda s: len(enc(s)))
+                if not files or len(new.encode()) >= spill.ETH_IN_SIZE:
+                    return None, "over_window"
+                fw = spill.firmware_with_files(FW, files, new)
+                ses = session(fw)
+                fw.unlink()
+                full, cids, cmd = [cids], [T.TCO] + enc(spill.call_text(new)) + [T.TCC], new
             resp = do_call(ses, cids)
             out = tool_text(resp)
             if out.startswith("error") and "overflow" not in out:
                 return None, "tool_error:" + out[:30]
             outs.append(out)
-            steps.append(({"name": "eth", "arguments": {"cmd": cmd}}, cids, resp))
+            steps.append(({"name": "eth", "arguments": {"cmd": cmd}}, cids, resp, *full))
         return finish({**meta, "tool_outputs": outs}, q, steps, answer(outs), r)
     except Exception as e:  # noqa: BLE001 - a bad draw is counted, not fatal
         return None, f"exception:{type(e).__name__}"

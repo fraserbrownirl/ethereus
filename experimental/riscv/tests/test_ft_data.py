@@ -55,6 +55,22 @@ def test_run_final_reads_return_not_gas(data):
             assert len(lines) < 2 or f"which is {lines[1]}." not in r["messages"][-1]["content"] or lines[0].endswith(f"{int(lines[1]):x}")
 
 
+def test_spilled_rows_train_the_full_call_and_answer_on_the_rewritten_one(data):
+    rows = [r for r in data[0] if r.get("spilled")]
+    assert rows, "no row spilled"
+    for r in rows:
+        roles = [s["role"] for s in r["segments"]]
+        assert "spill_prefill" in roles
+        pre = roles.index("spill_prefill")
+        assert not r["segments"][pre]["train"]
+        assert len(r["segments"][pre + 1]["ids"]) == 1 and r["segments"][pre + 1]["train"]  # </tool_call>
+        call = r["call_segments"][-1]
+        assert call["role"] == "assistant_call" and call["train"] and len(call["ids"]) - 2 > 80
+        assert all(not s["train"] for s in r["call_segments"][:-1])
+        assert "@spill/" in r["messages"][-3]["tool_calls"][0]["function"]["arguments"]["cmd"]
+        assert not r["tool_outputs"][-1].startswith("error")
+
+
 def test_negatives_call_nothing(data):
     for r in data[0]:
         if r["family"] == "negative":

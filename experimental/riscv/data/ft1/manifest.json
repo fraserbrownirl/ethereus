@@ -2,7 +2,7 @@
  "spec": "docs/finetune-spec-v1.md",
  "seed": 20261101,
  "firmware": "eth-bridge.elf",
- "firmware_sha256": "b320d31b4fd722ac0adfdbcf1313892967ea1bf8e826bd318138cb167c06c685",
+ "firmware_sha256": "61355554d4b9fd71988f0d2d7c97736c4158f7c6e578ceae149daf395dcb9aae",
  "chat_template_sha256": "a4aee8afcf2e0711942cf848899be66016f8d14a889ff9ede07bca099c28f715",
  "system_line": "Files under es/ hold the ethskills reference; before answering, list them and get whatever is relevant.",
  "tools": [
@@ -20,15 +20,14 @@
    "written": 800,
    "heldout": 80,
    "rejected": {
-    "over_window": 590,
-    "duplicate": 189,
-    "over_max_len": 9
+    "over_max_len": 13,
+    "duplicate": 234
    },
    "max_tokens": 8181,
    "variants": {
-    "opencode_tools": 233,
-    "plain": 556,
-    "opencode_system": 11
+    "opencode_tools": 227,
+    "plain": 558,
+    "opencode_system": 15
    },
    "sources": {}
   },
@@ -52,29 +51,29 @@
    "written": 200,
    "heldout": 20,
    "rejected": {
-    "over_window": 116,
-    "over_max_len": 3
+    "over_max_len": 7
    },
    "max_tokens": 8192,
    "variants": {
-    "plain": 144,
-    "opencode_tools": 51,
-    "opencode_system": 5
+    "plain": 147,
+    "opencode_tools": 49,
+    "opencode_system": 4
    },
    "sources": {}
   },
   "run": {
    "wanted": 400,
-   "written": 26,
-   "heldout": 2,
+   "written": 400,
+   "heldout": 40,
    "rejected": {
-    "over_window": 13721,
-    "duplicate": 3453
+    "over_max_len": 19,
+    "duplicate": 334
    },
-   "max_tokens": 6189,
+   "max_tokens": 8187,
    "variants": {
-    "plain": 17,
-    "opencode_tools": 9
+    "plain": 289,
+    "opencode_tools": 106,
+    "opencode_system": 5
    },
    "sources": {}
   },
@@ -85,10 +84,11 @@
    "rejected": {
     "pool_exhausted": 24839
    },
-   "max_tokens": 8186,
+   "max_tokens": 11898,
    "variants": {
-    "plain": 352,
-    "opencode_tools": 9
+    "opencode_tools": 76,
+    "plain": 280,
+    "opencode_system": 5
    },
    "sources": {
     "es/oracles.md": 30,
@@ -133,10 +133,11 @@
    "rejected": {
     "pool_exhausted": 20699
    },
-   "max_tokens": 8185,
+   "max_tokens": 11902,
    "variants": {
-    "plain": 295,
-    "opencode_tools": 6
+    "plain": 238,
+    "opencode_tools": 61,
+    "opencode_system": 2
    },
    "sources": {
     "es/protocol.md": 3,

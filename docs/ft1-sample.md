@@ -24,7 +24,7 @@ Variant: plain. Source: `es/why.md`.
 
 ## knowledge-00016
 
-Variant: plain. Source: `es/amm.md`.
+Variant: opencode_tools. Source: `es/amm.md`.
 
 **Question:** How can an attacker steal tokens through a callback using a fake pool?
 
@@ -154,7 +154,7 @@ Variant: plain. Source: `es/index.md`.
 
 ## knowledge-00039
 
-Variant: plain. Source: `es/index.md`.
+Variant: opencode_tools. Source: `es/index.md`.
 
 **Question:** Why should AI agents distrust their training data about Ethereum?
 
@@ -204,7 +204,7 @@ Variant: plain. Source: `es/protocol.md`.
 
 ## knowledge-00288
 
-Variant: plain. Source: `es/amaster.md`.
+Variant: opencode_tools. Source: `es/amaster.md`.
 
 **Question:** Which audit skill handles off-chain signatures, EIP-712, permits and meta-transactions?
 
@@ -254,7 +254,7 @@ Variant: plain. Source: `es/general.md`.
 
 ## knowledge-00281
 
-Variant: plain. Source: `es/index.md`.
+Variant: opencode_tools. Source: `es/index.md`.
 
 **Question:** How should an audit report present findings, and should the reviewer change the code?
 
