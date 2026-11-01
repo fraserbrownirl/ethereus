@@ -1,24 +1,8 @@
-..................................F..................................... [ 23%]
-..................................F..................................... [ 46%]
-........................................................................ [ 70%]
-........................................................................ [ 93%]
-....................                                                     [100%]
-=================================== FAILURES ===================================
-_ test_abi_encode_vectors[encode f(bytes2) 0x01-0xa7abdc090100000000000000000000000000000000000000000000000000000000000000\n] _
-tests/test_rv_eth.py:161: in test_abi_encode_vectors
-    assert val == want
-E   AssertionError: assert 'error (bad bytes)\n' == '0xa7abdc0901...00000000000\n'
-E     
-E     - 0xa7abdc090100000000000000000000000000000000000000000000000000000000000000
-E     + error (bad bytes)
-_______ test_over_window_call_is_left_to_the_firmware_while_spill_is_off _______
-tests/test_rv_serve.py:204: in test_over_window_call_is_left_to_the_firmware_while_spill_is_off
-    assert serve.SPILL_ON_GPU is False
-E   assert True is False
-E    +  where True = serve.SPILL_ON_GPU
-=========================== short test summary info ============================
-FAILED tests/test_rv_eth.py::test_abi_encode_vectors[encode f(bytes2) 0x01-0xa7abdc090100000000000000000000000000000000000000000000000000000000000000\n]
-FAILED tests/test_rv_serve.py::test_over_window_call_is_left_to_the_firmware_while_spill_is_off
-2 failed, 306 passed in 118.67s (0:01:58)
-TESTS_RC=1
+........................................................................ [ 22%]
+........................................................................ [ 45%]
+........................................................................ [ 67%]
+........................................................................ [ 90%]
+..............................                                           [100%]
+318 passed in 141.39s (0:02:21)
+TESTS_RC=0
 ALLDONE

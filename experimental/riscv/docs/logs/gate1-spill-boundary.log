@@ -1,0 +1,14 @@
+  ... 250 cases, 0 mismatches (25 s)
+  ... 500 cases, 0 mismatches (49 s)
+  ... 750 cases, 0 mismatches (73 s)
+  ... 1000 cases, 0 mismatches (97 s)
+  ... 1250 cases, 0 mismatches (121 s)
+  ... 1500 cases, 0 mismatches (146 s)
+  ... 1750 cases, 0 mismatches (170 s)
+  ... 2000 cases, 0 mismatches (194 s)
+boundary slice: 320 cases, 0 mismatches
+2320 cases (encode 2000), 0 mismatches (219.7 s), 0 rejected by design, asserted as errors
+  encode      2000 cases     36273 instructions     68678 tokens  (1.89 tok/instr)
+  encode     window: 2000 drawn, 1191 over-80-tokens, 0 over-16B-row, 809 run
+GATE 1 PASS (ref machine == Python on all cases)
+GATE1_RC=0
