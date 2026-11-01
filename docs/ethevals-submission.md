@@ -52,8 +52,6 @@ In all 9 held tasks the key is in `[verifier.env]`, no agent or environment sect
 
 ## Results
 
-None yet.
-
 Internet, 9B, through 2026-11-01 17:30 UTC, before the 7 mainnet-fork tasks:
 
 | Arm | Tasks scored | Tasks passed | Source on the eval VM |
