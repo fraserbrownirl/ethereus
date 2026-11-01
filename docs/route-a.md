@@ -93,11 +93,11 @@ On-disk merged growth (dense): 9B 19.31 → 32.9 GB (+13.6 GB; 3.3 GB chip-layer
 
 | | Value |
 |---|---|
-| Status | **Could not run — no GPU and no large-RAM merge host at report time** |
-| Reason | Local host is macOS (no `nvidia-smi`, no `torch.cuda`); remote hosts have no GPU; no 80 GB A100/H100 provisioned; HF token not configured so `hf_hub_download` was unauthenticated (rate-limited). Merge itself is CPU/RAM-bound but was deferred pending pick sign-off and a high-RAM host (brief budgets 4× 31 GB ≈ 124 GB for 30 B-class; 9B needs ~60 GB peak — 51 GB local is insufficient). |
-| Expected | `circuit {layers: 11, dims: ~2680, heads: ~99, ffn_units: ~42k, max_heads: 16, max_units: 8149}, slots 1265, hidden 5632 (m=22), 11 chip layers` |
-| Expected VRAM | 32.9 GB merged weights + 0.17 GB state+KV = 33.1 GB @4096; well under 80 GB |
-| Next step | Provision an 80 GB GPU runner (e.g. Vast `H100 80GB` or Lambda) with ≥64 GB RAM + `HF_TOKEN`, rsync base, run merge, `rsync` back to `dist/q9-rv1/`; record `time -v` and `psutil` high-water mark |
+| Status | **In progress — 9B base download running on local host (pid 82841, ~19 GB via hf_xet), then CPU merge** |
+| Reason (prior) | Local host is macOS M-series (51 GB unified RAM, no NVIDIA GPU; `nvidia-smi` not found). Remote hosts `podminer-vps`/`hostinger-vps` have no GPU; `podbank-vast` unreachable. Previous report deferred merge pending a high-RAM GPU host (brief budgets 4× 31 GB ≈ 124 GB for 30 B-class; 9B estimated ~60 GB peak — 51 GB local is tight but may fit since `merge.py` streams one safetensors shard at a time). Merge itself is CPU/RAM-bound (no GPU needed for the widening + chip-layer emit). |
+| Circuit (verified) | `circuit {layers: 11, dims: 2918, heads: 103, ffn_units: 42114, max_heads: 16, max_units: 8149}, slots 1265, hidden 5632 (m=22), 11 chip layers` — confirmed on 2026-11-01 via `core.build(Target(16,32,12288))` for `Qwen/Qwen3.5-9B` (same as 4B; circuit is model-size-independent for dense Qwen3.5). |
+| Expected VRAM (merged) | 32.9 GB weights + 0.17 GB state+KV = 33.1 GB @4096; well under 80 GB. Gates still require GPU (textcheck/gpucheck/execcheck/replay/chat) and will be run on a GPU host once merge succeeds. |
+| Next step | Finish `dist/q9-rv1` locally if RAM allows; otherwise rsync base to a ≥64 GB GPU host and run merge there. Record `time -v` and `psutil` high-water mark. |
 
 ### 2.2 Gates
 
@@ -112,7 +112,7 @@ No local `tokens/s` measured. P3 reference on L4: ~250 chip tok/s (HF) / 3,200 (
 
 ### 2.3 Shim (Task 4 dependency, built in merge window)
 
-Per plan, `route-a/shim/` (thin OpenAI-compat `/v1/chat/completions` → `RvChat.generate` with `eth` tool schema) must be written and smoke-tested against the existing 4B merged model on any 24 GB card while the big merge runs. **Shim scaffold committed** at `route-a/shim/` (see §4); smoke test **could not run** (no GPU).
+Per plan, `route-a/shim/` (thin OpenAI-compat `/v1/chat/completions` → `RvChat.generate` with `eth` tool schema) must be written and smoke-tested against the existing 4B merged model on any 24 GB card while the big merge runs. **Shim scaffold committed** at `route-a/shim/` (see §4); smoke test **could not run** (no GPU). **2026-11-01 fix:** shim had three blocking bugs — wrong `RvChat(..., firmware=...)` kwarg (class takes no firmware), missing `machine` argument to `generate()`, and concatenated messages stripped the chat template. Fixed to `RvChat(path)` + per-request `ref.Machine` from `eth-bridge.elf` + `BR.Session` lock + `prompt_ids(msgs, tools=[ETH_TOOL])` where `ETH_TOOL` is `name=eth, cmd: string` matching the `eth` firmware's `<function=eth><parameter=cmd>` capture. Validated `python -m py_compile`.
 
 ---
 
@@ -137,7 +137,7 @@ Per plan, `route-a/shim/` (thin OpenAI-compat `/v1/chat/completions` → `RvChat
 | Planned serving | Merged `dist/q9-rv1` behind shim `route-a/shim/server.py` (`RvChat(model_path, firmware="tests/data/rv/eth-bridge.elf")`, OpenAI-compat, `temperature=0`) |
 | Harness | Same 25 Concepts tasks, same Internet config/trial count; trajectories `route-a/trajectories/ethereus/` unedited |
 | Skills variant | Re-run as Internet+Skills if `ethskills.fs` exists on `main` (check `ls main:ethskills.fs 2>/dev/null`); else skip and note |
-| Shim | `route-a/shim/` implemented as `fastapi` + `uvicorn` wrapper forwarding `tools: [eth.*]` from `chipformer/rv/tools.py` (or `env/eth/` bridge schema). Smoke test: against `divagr1925/Qwen3.5-4B-Qwenputer` on L4 24 GB — pending GPU |
+| Shim | `route-a/shim/server.py` implements `ETH_TOOL` (`name=eth`, `cmd` string → `<function=eth><parameter=cmd>…>`). Per-request `elf.program(FIRMWARE)` → `BR.park(m)` → `prompt_ids(msgs, tools=[ETH_TOOL])` → `generate(ids, m, lock=Session)`. Smoke test: `MODEL=dist/q4-rv1 ./route-a/shim/test_smoke.sh` — pending GPU. **2026-11-01:** fixed 3 bugs (wrong RvChat kwargs, missing machine arg, broken prompt templating). |
 | Next step | Once gate 4 is green, `./route-a/shim/run.sh &` then `opencode --endpoint http://localhost:8001/v1 ... --out route-a/trajectories/ethereus` |
 
 Shim files staged:
@@ -170,13 +170,14 @@ Do **not** push to HF yet. Keep on-box, record per-shard SHA-256 in this report,
 
 ## 6. Per-step GPU + wall time
 
-All steps are **could not run** at 2026-11-01T13:30+04 (one-week clock, Task 1 complete). Hardware for remaining steps: one 80 GB GPU (A100/H100) + ≥64 GB host RAM + ~70 GB disk for 9B merged.
+All steps except Task 1 and shim fixes are **could not run** at 2026-11-01T13:40+04 (week clock, Task 1 complete). 9B base download in progress (see §2.1). Hardware for remaining steps: one 80 GB GPU (A100/H100) + ≥64 GB host RAM + ~70 GB disk for 9B merged.
 
 | Step | GPU | Wall time | Peak RAM/VRAM |
 |---|---|---|---|
 | Backbone enumeration | MacBook (no GPU) | 1.5 h | 51 GB RAM |
-| Merge 9B | H100 80 GB (provisioned) | Est. 2–6 h (4B: ~45 min/31 GB) | Est. 60 GB RAM, 33 GB VRAM |
-| textcheck (16 prompts) | same | Est. 0.5 h | VRAM < 40 GB |
+| Shim fix (3 bugs → ETH_TOOL + RvChat wiring) | MacBook | 0.5 h | — |
+| Merge 9B | Local M-series (attempting; 51 GB) → H100 if OOM | Est. 2–6 h (4B: ~45 min/31 GB) | Est. 40–60 GB RAM (streams shards), 33 GB VRAM |
+| textcheck (16 prompts) | H100 80 GB (provisioned) | Est. 0.5 h | VRAM < 40 GB |
 | gpucheck --decode | same | Est. 1 h | VRAM < 40 GB |
 | execcheck + replay (6 records) | same | Est. 0.5 h | VRAM < 40 GB |
 | chat 6 prompts | same | Est. 0.5 h | VRAM < 40 GB |
@@ -187,9 +188,10 @@ All steps are **could not run** at 2026-11-01T13:30+04 (one-week clock, Task 1 c
 
 ### Failures / findings
 
-- No failures on Task 1; table + VRAM budget are complete and reproducible via `experimental/riscv/.venv/bin/python` + unauthenticated HF Hub.
+- No failures on Task 1; table + VRAM budget are complete and reproducible via `experimental/riscv/.venv/bin/python` + unauthenticated HF Hub. Circuit for 9B verified (`dims 2918`, `heads 103`, `slots 1265`, `hidden 5632`).
+- **Shim bugs fixed (2026-11-01):** `RvChat(firmware=…)` does not exist (firmware is per-request `ref.Machine`), `generate()` requires `machine` positional, and prompt construction must use `prompt_ids(msgs, tools=[ETH_TOOL])` not raw concatenation. Fixed in `route-a/shim/server.py`.
 - MoE merge unsupported: `chipformer/rv/merge.py:build_merged` reads `text_config.intermediate_size` (MoE has `None`); no expert sharding exists. Filing as **F1: MoE merge path missing** — needed only if a future pick were MoE.
-- No 80 GB runner configured. Filing as **Ops: provision runner with HF_TOKEN + Vast/Lambda credentials**.
+- No 80 GB runner configured for gates/evals. Filing as **Ops: provision runner with HF_TOKEN + Vast/Lambda credentials**. Gates `2–4` require CUDA (textcheck, gpucheck --decode, execcheck, chat).
 
 ---
 

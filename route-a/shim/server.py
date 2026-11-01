@@ -4,9 +4,10 @@ Env: MODEL (merged checkpoint dir), FIRMWARE (eth-bridge.elf path).
 If MODEL is not set or does not exist, the app still starts and returns
 503 with a diagnostic body so the harness can report "could not run".
 
-The only tools exposed are the `eth` tools (abi/keccak/selector/encode/
-decode/create/create2/evm/run) via the RvChat bridge + firmware. No other
-tools, no prompt engineering beyond the harness system line.
+The only tools exposed are the `eth` tools (keccak / u256 / selector /
+encode / decode / create / create2 / run) via the RvChat bridge +
+eth-bridge firmware. No other tools, no prompt engineering beyond the
+harness system line.
 """
 from __future__ import annotations
 
@@ -17,35 +18,90 @@ from pathlib import Path
 from typing import Any
 
 from fastapi import FastAPI, HTTPException
-from fastapi.responses import JSONResponse
 from pydantic import BaseModel, Field
+
+ETH_TOOL = {
+    "type": "function",
+    "function": {
+        "name": "eth",
+        "description": (
+            "Ethereum helpers. One command per call: "
+            "keccak <hex|text>, u256 <expr>, selector <sig>, "
+            "encode <sig> [args...], decode <types> <hex>, "
+            "create <deployer> <nonce>, create2 <deployer> <salt> <initcodehash>, "
+            "run <contract> <calldata>. Returns the exact result or error(...)."
+        ),
+        "parameters": {
+            "type": "object",
+            "properties": {
+                "cmd": {
+                    "type": "string",
+                    "description": (
+                        "e.g. 'selector transfer(address,uint256)' or "
+                        "'keccak 0x6161' or 'u256 2**255 - 1' or "
+                        "'encode transfer(address,uint256) 0x000000000000000000000000000000000000dEaD 100' or "
+                        "'create 0x000000000000000000000000000000000000dEaD 7' or "
+                        "'run 0x... 0x...'"
+                    ),
+                }
+            },
+            "required": ["cmd"],
+        },
+    },
+}
 
 app = FastAPI(title="ethereus-shim", version="0.1.0")
 
 MODEL = os.environ.get("MODEL", "")
-FIRMWARE = os.environ.get("FIRMWARE", "experimental/riscv/tests/data/rv/eth-bridge.elf")
+FIRMWARE = os.environ.get(
+    "FIRMWARE", "experimental/riscv/tests/data/rv/eth-bridge.elf"
+)
 MODEL_PATH = Path(MODEL) if MODEL else None
+FIRMWARE_PATH = Path(FIRMWARE)
 
 _chat = None
+_machine = None
 _chat_error: str | None = None
 
 
 def _load_chat():
-    global _chat, _chat_error
+    global _chat, _machine, _chat_error
     if _chat is not None or _chat_error is not None:
         return
     if not MODEL_PATH or not MODEL_PATH.exists():
         _chat_error = f"MODEL not set or not found: {MODEL!r} (set MODEL=dist/q9-rv1)"
         return
     try:
+        # RvChat lives under experimental/riscv/chipformer/rv/chat.py.
+        # The repo root must be on sys.path OR we run with cwd=repo root and
+        # insert experimental/riscv so that `chipformer.rv` resolves to the
+        # experimental overlay (which has rv/). The editable install handles
+        # the q35/overlay; the insert covers the agent's bare-python case.
         import sys
-        sys.path.insert(0, "experimental/riscv")
-        from chipformer.rv.chat import RvChat  # type: ignore
 
-        fw = Path(FIRMWARE)
+        if "experimental/riscv" not in sys.path:
+            sys.path.insert(0, "experimental/riscv")
+        from chipformer.rv.chat import RvChat  # type: ignore
+        from chipformer.rv import elf, ref  # type: ignore
+
+        fw = FIRMWARE_PATH
         if not fw.exists():
-            fw = Path("experimental/riscv/tests/data/rv/eth-bridge.elf")
-        _chat = RvChat(str(MODEL_PATH), firmware=str(fw), executor=True)
+            # try from repo root explicitly
+            alt = Path("experimental/riscv/tests/data/rv/eth-bridge.elf")
+            if alt.exists():
+                fw = alt
+            else:
+                raise FileNotFoundError(f"firmware not found: {FIRMWARE!r}")
+
+        # RvChat has no firmware kwarg; you park a ref.Machine and pass it to
+        # generate(). We do it once here and reuse the snapshot.
+        _chat = RvChat(str(MODEL_PATH))
+        prog = elf.program(str(fw))
+        m = ref.Machine.from_program(prog)
+        from chipformer.rv import bridge as BR  # type: ignore
+
+        BR.park(m)
+        _machine = m
         _chat_error = None
     except Exception as e:
         _chat_error = f"RvChat load failed: {e}"
@@ -73,21 +129,38 @@ class ChatRequest(BaseModel):
 
 @app.get("/v1/models")
 def list_models():
-    return {"object": "list", "data": [{"id": "ethereus", "object": "model", "created": int(time.time()), "owned_by": "ethereus"}]}
+    return {
+        "object": "list",
+        "data": [
+            {
+                "id": "ethereus",
+                "object": "model",
+                "created": int(time.time()),
+                "owned_by": "ethereus",
+            }
+        ],
+    }
 
 
 @app.get("/health")
 def health():
-    return {"model": MODEL, "firmware": FIRMWARE, "ready": _chat is not None, "error": _chat_error}
+    return {
+        "model": MODEL,
+        "firmware": FIRMWARE,
+        "firmware_exists": FIRMWARE_PATH.exists()
+        or Path("experimental/riscv/tests/data/rv/eth-bridge.elf").exists(),
+        "ready": _chat is not None,
+        "error": _chat_error,
+    }
 
 
 @app.post("/v1/chat/completions")
 def chat_completions(req: ChatRequest):
-    # Harness may send temperature>0; force 0 for determinism per plan
     if req.stream:
-        raise HTTPException(status_code=400, detail="streaming not supported by this shim")
+        raise HTTPException(
+            status_code=400, detail="streaming not supported; send stream:false"
+        )
 
-    # Lazy init
     if _chat is None and _chat_error is None:
         try:
             _load_chat()
@@ -96,40 +169,44 @@ def chat_completions(req: ChatRequest):
     if _chat_error is not None:
         raise HTTPException(status_code=503, detail=_chat_error)
 
-    # Build prompt: concatenate messages with simple role tags; RvChat expects the user content
-    # that contains the tool-call trigger. We preserve the harness system line verbatim.
-    prompt = ""
-    for m in req.messages:
-        if m.role == "system":
-            prompt += m.content or ""
-            prompt += "\n"
-        elif m.role == "user":
-            prompt += m.content or ""
-            prompt += "\n"
-        elif m.role == "assistant" and m.content:
-            prompt += m.content + "\n"
-        elif m.role == "tool":
-            prompt += m.content or ""
-            prompt += "\n"
+    # Preserve the harness system line verbatim. RvChat.prompt_ids handles the
+    # Qwen chat template and tool schemas (tools=[ETH_TOOL]).
+    # If the caller supplied tools, honour them (the harness may); otherwise
+    # inject ETH_TOOL so the model can emit <function=eth>.
+    msgs: list[dict[str, str]] = [
+        {"role": m.role, "content": m.content or ""}
+        for m in req.messages
+        if m.role in ("system", "user", "assistant", "tool")
+    ]
+    tools = req.tools if req.tools else [ETH_TOOL]
 
-    # Delegate to RvChat
     try:
-        # RvChat.generate signature: generate(prompt, max_new_tokens=..., temperature=0)
+        # Fresh machine snapshot per request (generate mutates state).
+        from chipformer.rv import bridge as BR
+        from chipformer.rv import elf, ref
+
+        fw = FIRMWARE_PATH
+        if not fw.exists():
+            fw = Path("experimental/riscv/tests/data/rv/eth-bridge.elf")
+        m = ref.Machine.from_program(elf.program(str(fw)))
+        BR.park(m)
+
+        ids = _chat.prompt_ids(msgs, tools=tools)  # type: ignore[arg-type]
+        # Keep a copy for lockstep verification if the harness wants it; the
+        # shim itself just verifies lock==ok to surface firmware bugs.
+        m2 = ref.Machine.from_program(elf.program(str(fw)))
+        BR.park(m2)
+        lock = BR.Session(_chat.T, m2)
+        lock.history(ids)
+
         max_new = req.max_tokens or 4096
-        out = _chat.generate(prompt, max_new_tokens=max_new, temperature=0.0)  # type: ignore[attr-defined]
-        # Normalize output: RvChat may return (text, stats) or just text
-        if isinstance(out, tuple):
-            text = out[0]
-        else:
-            text = out
-        if not isinstance(text, str):
-            text = str(text)
-    except AttributeError:
-        # Fallback: try chat() or __call__
-        try:
-            text = _chat.chat(prompt)  # type: ignore[attr-defined]
-        except Exception as e2:
-            raise HTTPException(status_code=500, detail=f"RvChat call failed: {e2}") from e2
+        # RvChat.generate(ids, machine, max_new, max_chip, check_head, lock)
+        r = _chat.generate(ids, m, max_new=max_new, check_head=False, lock=lock)
+        text = _chat.text_of(r["tokens"])
+        # Surface lock errors as content prefix so trajectories stay verbatim &
+        # failures are obvious (do not fabricate a tool response).
+        if r.get("lock_error"):
+            text = f"[lock_error={r['lock_error']}] " + text
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"RvChat.generate failed: {e}") from e
 
@@ -140,11 +217,27 @@ def chat_completions(req: ChatRequest):
         "object": "chat.completion",
         "created": now,
         "model": req.model,
-        "choices": [{"index": 0, "message": {"role": "assistant", "content": text}, "finish_reason": "stop"}],
-        "usage": {"prompt_tokens": 0, "completion_tokens": 0, "total_tokens": 0},
+        "choices": [
+            {
+                "index": 0,
+                "message": {"role": "assistant", "content": text},
+                "finish_reason": "stop",
+            }
+        ],
+        "usage": {
+            "prompt_tokens": len(ids),
+            "completion_tokens": len(r.get("tokens", [])),
+            "total_tokens": len(ids) + len(r.get("tokens", [])),
+        },
     }
 
 
 @app.get("/")
 def root():
-    return {"ok": True, "docs": "/docs", "models": "/v1/models", "chat": "/v1/chat/completions"}
+    return {
+        "ok": True,
+        "docs": "/docs",
+        "models": "/v1/models",
+        "chat": "/v1/chat/completions",
+        "health": "/health",
+    }
