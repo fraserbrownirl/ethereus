@@ -129,12 +129,12 @@ transfer's 29,636 gas is mostly cold SLOAD (2,100) + warm SSTORE-reset
 
 | call | EVM gas | instr/call | tokens/call | tok/instr | ~wall |
 | --- | --- | --- | --- | --- | --- |
-| totalSupply() | 2,317 | 25,181 | 32,702 | 1.30 | 10 s |
-| balanceOf(alice) | 2,541 | 90,493 | 133,386 | 1.47 | 42 s |
-| transfer(bob,100) | 29,636 | 164,067 | 246,133 | 1.50 | 77 s |
-| approve(spender,50) | 24,486 | 135,962 | 213,942 | 1.57 | 67 s |
-| transferFrom (revert) | 2,827 | 157,521 | 238,757 | 1.52 | 75 s |
-| getAmountOut(1000,50000,60000) | 813 | 127,238 | 155,094 | 1.22 | 48 s |
+| totalSupply() | 2,317 | 29,840 | 38,222 | 1.28 | 12 s |
+| balanceOf(alice) | 2,541 | 69,596 | 110,336 | 1.59 | 35 s |
+| transfer(bob,100) | 29,636 | 127,734 | 205,864 | 1.61 | 64 s |
+| approve(spender,50) | 24,486 | 114,799 | 190,601 | 1.66 | 60 s |
+| transferFrom (revert) | 2,827 | 117,531 | 194,389 | 1.65 | 61 s |
+| getAmountOut(1000,50000,60000) | 813 | 95,143 | 119,310 | 1.25 | 37 s |
 
 EVM wall is from tokens at ~3,200 tok/s (batch 1, L4): the model emits
 tokens, so tokens drive demo time. (The older sections use ~3,700
@@ -146,26 +146,30 @@ SHL/SHR/SAR with shift ≥256 saturate (SAR keeps the sign); SIGNEXTEND
 with x≥31 is identity — each vs py-evm on output and gas, plus
 stack-underflow agreement (ADDMOD at 2-deep faults on both sides).
 
-Profile of `balanceOf` (90k instr): evm_run 46k (51%), keccak perm
-20k (22%, the mapping-slot hash — stays), memset 8k (9%, small fills
-through picolibc), stack_req 7k (7%), handle_run 2k (2%). No fixture
-copy: the fixture stays DROM-pointed (`evm_slot_orig` is noise), and
-calldata parse/response print are ~2% — the cost is interpretation,
-not scaffolding.
+Profile of `balanceOf` (70k instr): keccak perm 20k (28%, the
+mapping-slot hash — stays), evm_run 17k (25%), memset 8k (12%, small
+fills through picolibc), evm_init 7k (10%, the jumpmap build below),
+stack_req 7k (10%), handle_run 2k (3%). No fixture copy: the fixture
+stays DROM-pointed (`evm_slot_orig` is noise), and calldata
+parse/response print are ~3% — the cost is interpretation, not
+scaffolding.
 
-`evm_init` no longer bulk-zeroes: stack is sp-guarded, memory is zeroed
-lazily on expansion (as before), storage uses an occupancy count
-instead of a zeroed warm array. Fixed −52k instr/call (transfer
-216k→164k, totalSupply 77k→25k). Short of the 120k target because the
-remaining cost is the interpreter loop itself — the next step there is
-a dispatch rewrite (computed goto / cached stack top), not a Phase 1
-item.
+Two linear costs removed, both found by profiling (not guessed):
+`evm_init` no longer bulk-zeroes (stack is sp-guarded, memory is
+zeroed lazily on expansion, storage uses an occupancy count) — fixed
+−52k/call. JUMP/JUMPI no longer rescan the code for push-data (~3.2k
+per jump); `evm_init` builds a 1-bit-per-byte jumpmap once (~7k) and
+jumps validate in O(1) (~130 each) — another −21 to −40k on jumping
+calls (transfer 164k→128k). totalSupply nets +5k (one 7k scan replaces
+two cheap early-code scans) — accepted. Per-opcode top three on
+`transfer` are now all flat: PUSH1, CALLDATALOAD, PUSH2 (~140 each;
+CALLDATALOAD's byte loop at ~980 is the next micro-target, ~2k).
 
-RAM (32 KB total, ~4 KB C stack): `evm_t` is ~11 KB in BSS (stack
+RAM (32 KB total, ~4 KB C stack): `evm_t` is ~13 KB in BSS (stack
 128×u256, 4 KB memory, 32 storage slots; the ERC-20 touches ≤4
-slots/call). Image sizes: `.text 104,948 / .rodata 23,128 / .bss
-13,032`. Revised 2026-11-01 from 256 / 8 KB / 128 slots (~26 KB),
-which did not fit.
+slots/call), jumpmap 1.5 KB (12 KB code cap). Image sizes:
+`.text 105,836 / .rodata 23,152 / .bss 14,568`. Revised 2026-11-01
+from 256 / 8 KB / 128 slots (~26 KB), which did not fit.
 
 Bugs the diff found (all fixed): PUSH aliased `u256_shl` (which zeroes
 its output first) and loaded only the last immediate byte; fresh

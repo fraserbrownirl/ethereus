@@ -169,3 +169,42 @@ def test_raw_stack_underflow_matches_pyevm(fuzzbin, name, code):
     _o_ret, _o_gas, o_err = oracle_raw(bytes.fromhex(code))
     assert o_err
     assert _run(fuzzbin, "raw", code) == "error (evm)\n"
+
+
+MCOPY = [
+    # MSTORE 0x42@0; MCOPY(0x40, 0, 32); RETURN(0x40, 32)
+    ("mcopy-basic", "60426000526020600060405e60206040f3"),
+    # Overlapping (dest=1 > off=0): memmove semantics, RETURN(0, 33)
+    ("mcopy-overlap", "60426000526020600060015e60216000f3"),
+    # Zero length: MCOPY expands nothing; RETURN(0,32) still yields zeros
+    ("mcopy-zero", "6000600060005e60206000f3"),
+]
+
+
+@pytest.mark.parametrize("name,code", MCOPY, ids=[c[0] for c in MCOPY])
+def test_raw_mcopy_matches_pyevm(fuzzbin, name, code):
+    o_ret, o_gas, o_err = oracle_raw(bytes.fromhex(code))
+    assert not o_err
+    assert _run(fuzzbin, "raw", code) == f"0x{o_ret}\n{o_gas}\n"
+
+
+JUMPS = [
+    # PUSH2 7; JUMP; JUMPDEST; STOP; STOP; JUMPDEST@7; PUSH1 1; MSTORE; RETURN -> 1
+    ("jump-valid", "610007565b00005b600160005260206000f3"),
+    # PUSH2 0x5b00; PUSH1 1; JUMP: dest=1 holds 0x5b but is PUSH2 data -> fault
+    ("jump-into-immediate", "615b0060015600"),
+]
+
+
+def test_raw_jump_valid_matches_pyevm(fuzzbin):
+    _name, code = JUMPS[0]
+    o_ret, o_gas, o_err = oracle_raw(bytes.fromhex(code))
+    assert not o_err
+    assert _run(fuzzbin, "raw", code) == f"0x{o_ret}\n{o_gas}\n"
+
+
+def test_raw_jump_into_immediate_faults(fuzzbin):
+    _name, code = JUMPS[1]
+    _o_ret, _o_gas, o_err = oracle_raw(bytes.fromhex(code))
+    assert o_err
+    assert _run(fuzzbin, "raw", code) == "error (evm)\n"

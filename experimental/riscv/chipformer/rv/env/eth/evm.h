@@ -3,8 +3,9 @@
 #include <stddef.h>
 #include "u256.h"
 
-// RAM budget (32 KB total, ~4 KB C stack): evm_t lives in BSS (~11 KB).
-// Stack 128 (4 KB), mem 4 KB, storage 32 slots (ERC-20 touches <=4/call).
+// RAM budget (32 KB total, ~4 KB C stack): evm_t lives in BSS (~13 KB).
+// Stack 128 (4 KB), mem 4 KB, storage 32 slots (ERC-20 touches <=4/call),
+// jumpmap 1.5 KB (12 KB code cap).
 // Code and fixture stay in DROM (pointers, no copies); return data is an
 // (off,len) window into mem, not a copy.
 #define EVM_STACK_MAX 128
@@ -16,6 +17,7 @@
 #define EVM_LOGS_MAX 2
 #define EVM_LOG_DATA_MAX 64
 #define EVM_LOG_TOPICS_MAX 4
+#define EVM_CODE_MAX (12*1024) // file bytecode cap; jumpmap sized to it
 
 // Fixture slot, layout-identical to builtin_slot_t in builtins.gen.h
 // (asserted in builtins.c). DROM-resident; orig values for EIP-2200.
@@ -59,16 +61,18 @@ typedef struct {
     size_t fixture_len;
     int addr04_warm; // identity precompile touched
     int nslots; // storage occupancy: entries [0,nslots) valid, no zeroing
+    uint8_t jumpmap[EVM_CODE_MAX/8]; // valid-JUMPDEST bitmap, built at init
 } evm_t;
 
 // Return codes: 0 ok (check reverted), -2 invalid opcode, -3 stack,
 // -4 bad jump, -5 mem capacity, -6 storage full, -7 unsupported op,
 // -8 invalid (0xFE), -10 out of gas, -11 log overflow,
 // -12 chain-specific precompile.
-void evm_init(evm_t *evm, const uint8_t *code, size_t code_len,
-              const uint8_t *calldata, size_t calldata_len,
-              const u256_t *callvalue, const u256_t *caller, uint64_t chainid,
-              const evm_fixture_slot_t *fixture, size_t fixture_len);
+// Returns 0, or -1 if code_len exceeds EVM_CODE_MAX (caller prints too big).
+int evm_init(evm_t *evm, const uint8_t *code, size_t code_len,
+             const uint8_t *calldata, size_t calldata_len,
+             const u256_t *callvalue, const u256_t *caller, uint64_t chainid,
+             const evm_fixture_slot_t *fixture, size_t fixture_len);
 int evm_run(evm_t *evm);
 int evm_mem_expand(evm_t *evm, size_t offset, size_t len);
 // Original (fixture) value of a slot, 0 if absent. Used for SLOT diff output.

@@ -24,14 +24,22 @@ static u256_t* peek_u256(evm_t *e, int depth){
     return &e->stack[e->sp - depth];
 }
 
-void evm_init(evm_t *evm, const uint8_t *code, size_t code_len,
-              const uint8_t *calldata, size_t calldata_len,
-              const u256_t *callvalue, const u256_t *caller, uint64_t chainid,
-              const evm_fixture_slot_t *fixture, size_t fixture_len){
+int evm_init(evm_t *evm, const uint8_t *code, size_t code_len,
+             const uint8_t *calldata, size_t calldata_len,
+             const u256_t *callvalue, const u256_t *caller, uint64_t chainid,
+             const evm_fixture_slot_t *fixture, size_t fixture_len){
+    if(code_len>EVM_CODE_MAX) return -1;
     // No bulk zeroing: stack is sp-guarded, mem is zeroed on expansion,
     // storage/logs/retdata are count-guarded, calldata reads are len-guarded.
     evm->sp=-1; evm->mem_size=0;
     evm->code=code; evm->code_len=code_len; // DROM, no copy
+    // One linear pass marks every true JUMPDEST (skipping push-data), so
+    // JUMP/JUMPI validate in O(1). Rescanning per jump cost ~3k each.
+    { size_t nb=(code_len+7)/8, p=0;
+      memset(evm->jumpmap,0,nb);
+      while(p<code_len){ uint8_t op=code[p];
+          if(op==0x5B) evm->jumpmap[p>>3]|=(uint8_t)(1<<(p&7));
+          p+=(op>=0x60&&op<=0x7F)?1+(op-0x5F):1; } }
     evm->pc=0;
     evm->gas_used=0; evm->gas_limit=EVM_GAS_LIMIT;
     evm->halted=0; evm->reverted=0;
@@ -48,6 +56,7 @@ void evm_init(evm_t *evm, const uint8_t *code, size_t code_len,
     evm->fixture=fixture; evm->fixture_len=fixture_len;
     evm->addr04_warm=0;
     evm->nslots=0;
+    return 0;
 }
 
 // --- Storage (32-slot RAM map + DROM fixture for orig values) -----------
@@ -133,16 +142,10 @@ static int charge_mem_expand(evm_t *evm, uint32_t offset, uint32_t len){
     return 0;
 }
 
-// True JUMPDEST check: skips push-data so jumps into immediates fail.
-static int jumpdest_valid(const uint8_t *code, size_t len, size_t d){
-    if(d>=len || code[d]!=0x5B) return 0;
-    size_t p=0;
-    while(p<d){
-        uint8_t op=code[p];
-        if(op>=0x60 && op<=0x7F) p+=1+(op-0x5F);
-        else p+=1;
-    }
-    return p==d;
+// O(1) JUMPDEST check against the init-built bitmap.
+static int jumpdest_valid(evm_t *evm, uint32_t d){
+    if((size_t)d>=evm->code_len) return 0;
+    return (evm->jumpmap[d>>3]>>(d&7))&1;
 }
 
 // Stack depth requirement per opcode: need items present, growth net push.
@@ -176,7 +179,7 @@ static void stack_req(uint8_t op, int *need, int *growth){
             op==0x46 || op==0x47 || op==0x48 || op==0x4A || op==0x4B){ *need=0; *growth=1; }
     else if(op==0x31 || op==0x3F || op==0x35 || op==0x40){ *need=1; *growth=0; }
     else if(op==0x3C){ *need=4; *growth=-4; } // EXTCODECOPY
-    else if(op==0x37 || op==0x39 || op==0x3E || op==0x27){ *need=3; *growth=-3; }
+    else if(op==0x37 || op==0x39 || op==0x3E || op==0x5E){ *need=3; *growth=-3; }
     else if(op==0xF1 || op==0xF2 || op==0xF4){ *need=7; *growth=-6; }
     else if(op==0xFA){ *need=6; *growth=-5; }
     else if(op==0xF0 || op==0xF5){ *need=3; *growth=-2; }
@@ -236,7 +239,7 @@ int evm_run(evm_t *evm){
                 base_gas=2; break;
             case 0x31: case 0x3C: case 0x3F: base_gas=2; break; // stubs (unreachable on gate)
             case 0x35: base_gas=3; break;
-            case 0x37: case 0x39: case 0x3E: base_gas=3; break;
+            case 0x37: case 0x39: case 0x3E: case 0x5E: base_gas=3; break;
             case 0x47: base_gas=5; break; // SELFBALANCE
             case 0x50: base_gas=2; break;
             case 0x51: case 0x52: case 0x53: base_gas=3; break;
@@ -347,6 +350,12 @@ int evm_run(evm_t *evm){
                          { uint32_t w=(ll+31)/32; if(check_gas(evm,3*(uint64_t)w)!=0) return -10; }
                          for(uint32_t k=0;k<ll;k++){ uint64_t idx=(uint64_t)oo+k; evm->mem[dd+k]=(idx<evm->code_len)?evm->code[idx]:0; }
                          evm->pc++; break; }
+            case 0x5E: { u256_t dOff,oOff,len; pop_u256(evm,&dOff); pop_u256(evm,&oOff); pop_u256(evm,&len);
+                         uint32_t dd,oo,ll; if(u256_to_u32(&dOff,&dd)!=0||u256_to_u32(&oOff,&oo)!=0||u256_to_u32(&len,&ll)!=0) return -5;
+                         { int rr=charge_mem_expand(evm,dd,ll); if(rr!=0) return rr; }
+                         { int rr=charge_mem_expand(evm,oo,ll); if(rr!=0) return rr; }
+                         { uint32_t w=(ll+31)/32; if(check_gas(evm,3*(uint64_t)w)!=0) return -10; }
+                         memmove(evm->mem+dd,evm->mem+oo,ll); evm->pc++; break; }
             case 0x3A: { u256_t r; u256_zero(&r); push_u256(evm,r); evm->pc++; break; }
             case 0x3B: { u256_t a,r; pop_u256(evm,&a); u256_zero(&r); push_u256(evm,r); evm->pc++; break; }
             case 0x3C: { u256_t a,dOff,oOff,len; pop_u256(evm,&a); pop_u256(evm,&dOff); pop_u256(evm,&oOff); pop_u256(evm,&len);
@@ -394,9 +403,9 @@ int evm_run(evm_t *evm){
                          if(check_gas(evm,cost)!=0) return -10;
                          evm->storage[idx].val=v; evm->pc++; break; }
             case 0x56: { u256_t d; pop_u256(evm,&d); uint32_t dd; if(u256_to_u32(&d,&dd)!=0) return -4;
-                         if(!jumpdest_valid(evm->code,evm->code_len,dd)) return -4; evm->pc=dd; break; }
+                         if(!jumpdest_valid(evm,dd)) return -4; evm->pc=dd; break; }
             case 0x57: { u256_t d,c; pop_u256(evm,&d); pop_u256(evm,&c); uint32_t dd; if(u256_to_u32(&d,&dd)!=0) return -4;
-                         if(!u256_is_zero(&c)){ if(!jumpdest_valid(evm->code,evm->code_len,dd)) return -4; evm->pc=dd; } else evm->pc++; break; }
+                         if(!u256_is_zero(&c)){ if(!jumpdest_valid(evm,dd)) return -4; evm->pc=dd; } else evm->pc++; break; }
             case 0x58: { u256_t r; u256_from_u64(&r, (uint64_t)((uint32_t)evm->pc)); push_u256(evm,r); evm->pc++; break; }
             case 0x59: { u256_t r; u256_from_u64(&r, (uint64_t)((uint32_t)evm->mem_size)); push_u256(evm,r); evm->pc++; break; }
             case 0x5A: { u256_t r; u256_from_u64(&r, (uint64_t)((uint32_t)(evm->gas_limit-evm->gas_used))); push_u256(evm,r); evm->pc++; break; }

@@ -578,9 +578,11 @@ static void handle_run(const char *arg){
     unsigned long long chainid=strtoull(chainstr,&end,0);
     if(!end || *end){ put_str("error (bad chainid)\n"); return; }
 
-    static evm_t evm; // BSS, not stack (~11 KB)
-    evm_init(&evm, code, code_len, calldata, calldata_len,
-             &callvalue, &caller, (uint64_t)chainid, fixture, fixture_len);
+    static evm_t evm; // BSS, not stack (~13 KB)
+    if(evm_init(&evm, code, code_len, calldata, calldata_len,
+             &callvalue, &caller, (uint64_t)chainid, fixture, fixture_len)!=0){
+        put_str("error (too big)\n"); return;
+    }
     int rc=evm_run(&evm);
     if(rc==-2){ put_str("error (invalid opcode)\n"); return; }
     if(rc==-3){ put_str("error (stack)\n"); return; }
@@ -740,7 +742,9 @@ int host_raw(const char *hex){
     }
     static evm_t evm;
     u256_t zero; u256_zero(&zero);
-    evm_init(&evm, code, hl/2, NULL, 0, &zero, &zero, 1, NULL, 0);
+    if(evm_init(&evm, code, hl/2, NULL, 0, &zero, &zero, 1, NULL, 0)!=0){
+        put_str("error (too big)\n"); return 0;
+    }
     int rc=evm_run(&evm);
     if(rc!=0){ put_str("error (evm)\n"); return 0; }
     const uint8_t *ret=evm.mem+evm.ret_off;

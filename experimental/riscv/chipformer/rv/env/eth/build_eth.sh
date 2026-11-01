@@ -47,7 +47,7 @@ else
   LD="$B/eth.ld"; DEFS=""
 fi
 # shellcheck disable=SC2086
-$GCC -march=$MARCH -mabi=ilp32 -O2 $DEFS -isystem "$PICO/include" -I"$ENV" -I"$HERE" -I"$HERE/xkcp" -I"$B" \
+$GCC -march=$MARCH -mabi=ilp32 -O2 ${EXTRA_CFLAGS:-} $DEFS -isystem "$PICO/include" -I"$ENV" -I"$HERE" -I"$HERE/xkcp" -I"$B" \
   -nostdlib -nostartfiles -static -T"$LD" -o "$OUT/$NAME.elf" \
   "$ENV/crt0.S" "$HERE/eth.c" "$HERE/u256.c" "$HERE/keccak.c" "$HERE/xkcp/KeccakP-1600-inplace32BI.c" "$HERE/abi.c" "$HERE/evm.c" "$HERE/builtins.c" "$ENV/sys.c" "$B/sled.S" \
   -Wl,--start-group "$PICO/lib/libc.a" "$PICO/lib/libsemihost.a" "$PICO/lib/libnosys.a" ${LIBGCC:+"$LIBGCC"} -Wl,--end-group
