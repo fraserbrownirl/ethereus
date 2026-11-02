@@ -16,7 +16,12 @@ import torch
 LETTERS = "ABCD"
 
 
+FIXED = Path(__file__).with_name("mmlu500.json")  # the 500 as a file, so the pinned venv needs no parquet reader
+
+
 def questions(n: int, seed: int):
+    if n == 500 and seed == 0 and FIXED.exists():
+        return json.loads(FIXED.read_text())["questions"]
     import pyarrow.parquet as pq
     from huggingface_hub import hf_hub_download
 
