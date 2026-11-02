@@ -4,7 +4,7 @@ Single list for the core repo and Route A; the Cursor agent and Muse are retired
 
 | Task | State | Blocker | Crossing artefact | Started | Finished | Result |
 |---|---|---|---|---|---|---|
-| Unary minus fix in eth firmware (Fraser, priority): port, gate slice, rebuild, gate 1, exposure list | running | Gate 1 PASS on the Mac; gate 4, canary, snapshot verify on the GPU | ELF 7c4175e6 (bridge), 7dcd8933 | 2026-11-02 | | gate 1 u256 7,652 cases, 0 mismatches; nothing to regenerate |
+| Unary minus fix in eth firmware (Fraser, priority): port, gate slice, rebuild, gate 1, exposure list | done | | ELF 7c4175e6 (bridge), 7dcd8933 | 2026-11-02 | 2026-11-02 | gate 1 u256 7,652 cases, 0 mismatches; gate 4 6 of 6, 0 wrong on replay; canary PASS; snapshot verify OK; nothing to regenerate |
 | K3 merge: compiled layers into Kimi K3 (mixture-of-experts, gated delta), its gates | running | Feasibility note written (`docs/k3-feasibility.md`): four research items (no zero decay, `situ`, attention residuals, tokenizer); stages 0 to 2 on Mac and eval VM now; stage 3 needs 8x B200 class (Fraser: spend) | firmware ELF 8f07bfe3 and the circuit; nothing from the 9B checkpoints | | | |
 | Task generator for step 3: Solidity build tasks scored by machines, three kinds, Harbor format, 50 proven per kind (Fraser) | running | Kind 1: 30 proven (OpenZeppelin 15, dragonfly 15); Solady 15 and PRB 5 in proof (`kind1v6`); Kinds 2 and 3 next | none; uses OpenZeppelin v5.7.0 and real findings | 2026-11-02 | | |
 | API and open call | blocked | Wait for K3: the flywheel pays off only on a model builders prefer (Fraser) | the K3 checkpoint | | | |
