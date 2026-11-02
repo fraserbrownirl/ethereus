@@ -11,6 +11,8 @@ Rules for future work. Each line is the rule an accepted fix implies; the bracke
 - Gate scripts exit nonzero on failure; a gate is read by its verdict line and its exit code together. (`eth.py` exited 0 on GATE 1 FAIL; textcheck too)
 - A gate's expected value comes from an evaluator independent of the firmware's parser; an oracle that copies the firmware's tokenizer inherits its bugs. Unary `-(E)` is a wrapped `(0-(E))`, asserted after every binary operator, nested, and at the u256 boundaries in decimal and hex. (eth's bare `0-E` desugar computed `5 - -(3)` as 2; the Python oracle mirrored it and gate 1 passed; the Solana lane found it)
 
+- A firmware helper that writes its output before it finishes reading its inputs (u256 sub, sub_borrow, shl, shr, sar, divmod) is never called with an output that is also an input; `tests/test_rv_eth_alias.py` checks every call. (the Solana lane's u128_sub_borrow, narrowed from eth's u256_sub_borrow, read `a` after writing `r` when `r == a`; eth has the same helpers but no aliased call)
+
 ## Oracles, gates and tests
 
 - The oracle is the external library; the firmware moves to match it, never the reverse. (quirk-mirroring harness)
