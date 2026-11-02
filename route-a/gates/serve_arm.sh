@@ -23,7 +23,7 @@ case "$ARM" in
 esac
 case "$ARM" in
   stock) export ETHEREUS_BASE=1 MODEL=$W/models/Qwen3.5-9B MODEL_ID=q9-base ;;
-  untrained) export MODEL=$W/dist-store/q9-store-rv MODEL_ID=q9-rv2 ;;
+  untrained) export MODEL=$W/dist-store/q9-store-rv MODEL_ID=q9-rv2 SNAPSHOT=$MAIN/build/ethskills.fs.npz ;;
   v01) export MODEL=$W/dist-store/q9-store-rv-ft1b MODEL_ID=q9-rv2 ETHEREUS_SYSTEM_LINE="$LINE" ;;
   v01-skills) export MODEL=$W/dist-store/q9-store-rv-ft1b MODEL_ID=q9-rv2 ETHEREUS_SYSTEM_LINE="$LINE" SNAPSHOT=$MAIN/build/ethskills.fs.npz ;;
 esac
