@@ -65,27 +65,83 @@ def test_malformed_result_agrees_with_the_oracle(kind, cmd):
         return
     if kind == "run" or cmd.split()[0] not in ("keccak", "u256", "selector", "encode", "decode", "create", "create2"):
         return
-    assert got == eth.expected(cmd), f"{cmd[:50]!r}: firmware {got[:60]!r}, oracle {eth.expected(cmd)[:60]!r}"
+    assert eth.agrees(got, eth.expected(cmd)), f"{cmd[:50]!r}: firmware {got[:60]!r}, oracle {eth.expected(cmd)[:60]!r}"
 
 
-# Answered, and the oracle agrees, but rule 3 wants an error. The ELF is frozen through the evals, so these
-# change with the spill fix; strict, so the fix has to remove them from this list.
-LENIENT = [
+# Each of these used to answer instead of erroring, and the oracle agreed.
+MUST_ERROR = [
     "keccak",
+    "keccak @nosuchfile",
     "u256 " + "9" * 90,
+    "u256 115792089237316195423570985008687907853269984665640564039457584007913129639936",
     "selector (",
     "selector foo",
     "selector foo(",
+    "selector foo)(",
+    "selector (uint256)",
+    "selector foo(uint256)x",
+    "selector f(" + "a" * 300 + ")",
     "encode foo(bytes32) 0x12",
 ]
 
 
-@pytest.mark.xfail(strict=True, reason="firmware accepts it; fixed with the next firmware change")
-@pytest.mark.parametrize("cmd", LENIENT, ids=[c[:20] for c in LENIENT])
-def test_lenient_input_should_answer_error(cmd):
+@pytest.mark.parametrize("cmd", MUST_ERROR, ids=[c[:20] for c in MUST_ERROR])
+def test_must_answer_error(cmd):
     m = eth.machine(cmd, ELF)
     m.run(3 * 10**6)
-    assert m.out.decode("latin-1").startswith("error")
+    got = m.out.decode("latin-1")
+    assert got.startswith("error"), got[:60]  # by design: asserted, not compared with an oracle
+    assert eth.expected(cmd) == eth.REJECT
+
+
+@pytest.mark.parametrize("cmd", [
+    "keccak 0x", "keccak foo", "u256 115792089237316195423570985008687907853269984665640564039457584007913129639935",
+    "u256 0-1", "selector foo()", "selector permit (address, ((address, uint160), uint256))",
+    "encode foo(bytes32) 0x" + "12" * 32, "encode foo(bytes1) 0x12",
+])
+def test_neighbours_of_those_still_answer(cmd):
+    m = eth.machine(cmd, ELF)
+    m.run(3 * 10**6)
+    got = m.out.decode("latin-1")
+    assert not got.startswith("error"), got[:60]
+    assert got == eth.expected(cmd)
+
+
+# Found by the over-window gate: a positive decimal was read as two's complement.
+@pytest.mark.parametrize("cmd", [
+    f"encode f(int256) {2**255}", f"encode f(int8) {2**256 - 1}", f"encode f(int256) {2**255 - 1}", f"encode f(int256) {-2**255}",
+    "encode f(int256) 0x" + "8" + "0" * 63, "encode f(int256) 0x" + "f" * 64,
+    f"encode f(uint256) {2**256}", f"encode f(int256) {2**256}",
+])
+def test_integer_boundaries_agree_with_the_oracle(cmd):
+    m = eth.machine(cmd, ELF)
+    m.run(3 * 10**6)
+    assert m.out.decode("latin-1") == eth.expected(cmd)
+
+
+def test_boundary_slice_covers_every_width():
+    cases = list(eth.boundary_cases())
+    assert len(cases) == 32 * 2 * 4 * 2 + 32 * 2
+    assert sum(w == eth.REJECT for _, w in cases) == 32 * 2 * 2 * 2 + 32
+    for w in (8, 128, 256):
+        for t in ("int", "uint"):
+            assert sum(c.startswith(f"encode f({t}{w}) ") for c, _ in cases) == 8
+            assert sum(c.startswith(f"encode f({t}{w}) ") and ("0x" in c) for c, _ in cases) == 4
+
+
+def test_boundary_slice_on_the_firmware():
+    bad = []
+    for cmd, want in eth.boundary_cases():
+        m = eth.machine(cmd, ELF)
+        m.run(3 * 10**6)
+        if not eth.agrees(m.out.decode("latin-1"), want):
+            bad.append((cmd[:40], m.out.decode("latin-1")[:40]))
+    assert not bad, bad
+
+
+def test_answering_a_by_design_input_fails_the_gate():
+    assert eth.agrees("error (bad sig)\n", eth.REJECT)
+    assert not eth.agrees("0x41b1a064\n", eth.REJECT)
 
 
 def test_gate_exits_nonzero_on_a_mismatch(monkeypatch):

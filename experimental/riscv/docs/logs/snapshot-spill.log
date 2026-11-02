@@ -1,0 +1,44 @@
+boot stream: 61403 tokens, 6346 owned
+  evaluated 2048/61403
+  evaluated 4096/61403
+  evaluated 6144/61403
+  evaluated 8192/61403
+  evaluated 10240/61403
+  evaluated 12288/61403
+  evaluated 14336/61403
+  evaluated 16384/61403
+  evaluated 18432/61403
+  evaluated 20480/61403
+  evaluated 22528/61403
+  evaluated 24576/61403
+  evaluated 26624/61403
+  evaluated 28672/61403
+  evaluated 30720/61403
+  evaluated 32768/61403
+  evaluated 34816/61403
+  evaluated 36864/61403
+  evaluated 38912/61403
+  evaluated 40960/61403
+  evaluated 43008/61403
+  evaluated 45056/61403
+  evaluated 47104/61403
+  evaluated 49152/61403
+  evaluated 51200/61403
+  evaluated 53248/61403
+  evaluated 55296/61403
+  evaluated 57344/61403
+  evaluated 59392/61403
+  evaluated 61403/61403
+predictions: 6346 owned positions all exact
+snapshot: build/ethskills.fs.npz (1780750 bytes, 49 heads, 6812 rows)
+manifest: build/ethskills.fs.manifest.json
+SNAP_RC=0
+get es/blocks.md: 135 body tokens to generate
+[transformers] `causal_conv1d_fn` is falling back to its reference PyTorch implementation because `causal_conv1d` is not installed. This is correct but much slower; install `causal_conv1d` for the optimized kernel.
+[transformers] `chunk_gated_delta_rule` is falling back to its reference PyTorch implementation because `flash-linear-attention` is not installed. This is correct but much slower; install `flash-linear-attention` for the optimized kernel.
+[transformers] `causal_conv1d_update` is falling back to its reference PyTorch implementation because `causal_conv1d` is not installed. This is correct but much slower; install `causal_conv1d` for the optimized kernel.
+[transformers] `fused_recurrent_gated_delta_rule` is falling back to its reference PyTorch implementation because `flash-linear-attention` is not installed. This is correct but much slower; install `flash-linear-attention` for the optimized kernel.
+  generated 0/135
+  generated 100/135
+verify: get es/blocks.md -> 135 tokens, '\n<tool_response>\n# Verify DeFi Integrations\n\nBefore selectin' OK
+VERIFY_RC=0

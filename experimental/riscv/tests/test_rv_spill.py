@@ -35,6 +35,63 @@ def test_short_call_is_unchanged(T):
     cmd = "selector transfer(address,uint256)"
     assert spill.rewrite(cmd, lambda s: count(T, s)) == (cmd, {})
     assert spill.firmware_with_files(ELF, {}) == ELF
+    assert spill.firmware_with_files(ELF, {}, None) == ELF
+
+
+def run_calls(T, fw, *calls):
+    """Each call as the circuit sees it: captured tokens or nothing, then a run."""
+    s = BR.Session(T, spill.parked(fw))
+    out = []
+    for c in calls:
+        s.qwen([T.TCO] + (T.tok.encode(spill.call_text(c), add_special_tokens=False).ids if c else []) + [T.TCC])
+        out.append(T.tok.decode(s.runs[-1], skip_special_tokens=False).split("<tool_response>\n")[1].split("\n</tool_response>")[0])
+    return out
+
+
+def run_records(T, fw, captured: str):
+    """The whole token stream of a run: every record the machine emits, not only the text it prints."""
+    s = BR.Session(T, spill.parked(fw))
+    ids = T.tok.encode(spill.call_text(captured), add_special_tokens=False).ids if captured else []
+    s.qwen([T.TCO] + ids)
+    n = len(s.toks)
+    s.qwen([T.TCC])
+    return s.toks[n:]
+
+
+def test_a_spilled_run_is_the_same_whatever_was_captured(T):
+    """The circuit's capture is empty after a restart; the reference's holds the rewritten call. Both must run alike,
+    token for token, or the lockstep fails: so the firmware must not read the capture on a spilled run."""
+    data = bytes(range(256)) * 3
+    new, files = spill.rewrite("keccak 0x" + data.hex(), lambda s: count(T, s))
+    fw = spill.firmware_with_files(ELF, files, new)
+    assert run_records(T, fw, "") == run_records(T, fw, new)
+
+
+def test_eth_in_answers_when_nothing_was_captured(T):
+    """The GPU case: a snapshot restart clears the capture, so the circuit sees an empty window."""
+    fw = spill.firmware_with_files(ELF, {}, "selector transfer(address,uint256)")
+    assert run_calls(T, fw, "") == ["0xa9059cbb"]
+
+
+def test_eth_in_wins_over_the_capture_and_is_used_once(T):
+    fw = spill.firmware_with_files(ELF, {}, "selector transfer(address,uint256)")
+    assert run_calls(T, fw, "selector approve(address,uint256)", "selector approve(address,uint256)") == ["0xa9059cbb", "0x095ea7b3"]
+
+
+def test_spilled_command_and_files_answer_on_empty_capture(T):
+    data = bytes(range(256)) * 3
+    new, files = spill.rewrite("keccak 0x" + data.hex(), lambda s: count(T, s))
+    fw = spill.firmware_with_files(ELF, files, new)
+    assert run_calls(T, fw, "") == ["0x" + keccak(data).hex()]
+
+
+def test_no_eth_in_over_window_still_answers_too_long(T):
+    assert "error (too long)" in run_calls(T, ELF, "keccak " + "x" * 2000)[0]
+
+
+def test_over_eth_in_is_refused():
+    with pytest.raises(ValueError):
+        spill.firmware_with_files(ELF, {}, "k" * 2048)
 
 
 def test_parse_cmd_round_trip():

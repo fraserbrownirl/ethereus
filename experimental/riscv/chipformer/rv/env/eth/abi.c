@@ -48,18 +48,6 @@ static int canon_num(const char *s, long *out){
 // Decimal magnitude check: skip spaces, one sign, zeros; the digit run must
 // be <= 2^256-1. No digits at all (hex, empty, garbage) counts as fits;
 // the parse step rejects those.
-static int dec_fits256(const char *s){
-    while(isspace((unsigned char)*s)) s++;
-    if(*s=='-'||*s=='+') s++;
-    while(*s=='0') s++;
-    size_t n=0; const char *p=s;
-    while(isdigit((unsigned char)*p)){ n++; p++; }
-    if(n==0) return 1;
-    if(n>78) return 0;
-    if(n<78) return 1;
-    return strncmp(s, "115792089237316195423570985008687907853269984665640564039457584007913129639935", 78) <= 0;
-}
-
 // Strict UTF-8 (matches Python's decoder: rejects overlongs, surrogates,
 // >U+10FFFF). 0 valid, -1 invalid.
 static int utf8_valid(const uint8_t *s, size_t n){
@@ -304,7 +292,7 @@ static int encode_one(const ty_t *ty, const char *arg, uint8_t *slot32, char *er
         }
         u256_t v;
         if(u256_try_parse_auto(&v, arg)!=0){ set_err(errbuf,errlen,"bad uint"); return -1; }
-        if(!dec_fits256(arg)){ set_err(errbuf,errlen,"uint overflow"); return -1; }
+        if(!u256_dec_fits(arg)){ set_err(errbuf,errlen,"uint overflow"); return -1; }
         if(u256_bitlen(&v) > bits){ set_err(errbuf,errlen,"uint overflow"); return -1; }
         for(int i=0;i<8;i++){
             uint32_t w=v.d[7-i];
@@ -322,12 +310,15 @@ static int encode_one(const ty_t *ty, const char *arg, uint8_t *slot32, char *er
         }
         u256_t v;
         if(u256_try_parse_auto(&v, arg)!=0){ set_err(errbuf,errlen,"bad int"); return -1; }
-        if(!dec_fits256(arg)){ set_err(errbuf,errlen,"int overflow"); return -1; }
+        if(!u256_dec_fits(arg)){ set_err(errbuf,errlen,"int overflow"); return -1; }
         u256_t one, lim; u256_one(&one); u256_shl(&lim, &one, (uint32_t)(bits-1));
         const char *ts=arg; while(isspace((unsigned char)*ts)) ts++;
         if(*ts=='-'){
             u256_t mag; u256_neg(&mag, &v);
             if(u256_cmp(&mag, &lim) > 0){ set_err(errbuf,errlen,"int overflow"); return -1; }
+        } else if(!(ts[0]=='0'&&(ts[1]=='x'||ts[1]=='X'))){
+            // A positive decimal is a value, never two's complement: 2**255 is not int256's minimum.
+            if(u256_cmp(&v, &lim) >= 0){ set_err(errbuf,errlen,"int overflow"); return -1; }
         } else {
             if(u256_cmp(&v, &lim) >= 0){
                 u256_t lo; u256_neg(&lo, &lim);
@@ -362,8 +353,8 @@ static int encode_one(const ty_t *ty, const char *arg, uint8_t *slot32, char *er
         while(isspace((unsigned char)*s)) s++;
         if(s[0]=='0'&&(s[1]=='x'||s[1]=='X')) s+=2;
         if(check_hex_body(arg,&len,errbuf,errlen)!=0) return -1;
-        if(len > (size_t)n*2){ set_err(errbuf,errlen,"bad bytes"); return -1; }
-        // left-aligned, zero-padded (matches eth_abi's short-value padding)
+        if(len != (size_t)n*2){ set_err(errbuf,errlen,"bad bytes"); return -1; }
+        // exactly N bytes: a short value is an error, not a guess at its alignment
         for(size_t i=0;i<len/2;i++) slot32[i]=(hex_nib(s[i*2])<<4)|hex_nib(s[i*2+1]);
         return 0;
     }

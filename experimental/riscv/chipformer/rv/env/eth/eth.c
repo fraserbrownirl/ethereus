@@ -137,6 +137,7 @@ static void handle_keccak(const char *arg){
     while(isspace((unsigned char)*s)) s++;
     char *e=s+strlen(s);
     while(e>s && isspace((unsigned char)e[-1])){ e--; *e=0; }
+    if(!*s){ put_str("error (no input)\n"); return; }
     if(s[0]=='@'){ const char *f=file_arg(s); if(!f){ put_str("error (no file)\n"); return; } s=(char*)f; }
     uint8_t data[2048];
     size_t dlen=0;
@@ -163,11 +164,23 @@ static void handle_keccak(const char *arg){
     put('\n');
 }
 
+// name(...) with balanced parens, ending at the last one. The types are not checked here.
+static int sig_shape_ok(const char *s){
+    if(*s=='(' ) return 0;
+    int depth=0, seen=0;
+    for(const char *p=s;*p;p++){
+        if(*p=='('){ depth++; seen=1; }
+        else if(*p==')'){ if(--depth<0) return 0; }
+        else if(seen && depth==0 && !isspace((unsigned char)*p)) return 0;
+    }
+    return seen && depth==0;
+}
+
 static void handle_selector(const char *arg){
     char tmp[256]; cpy_cap(tmp, arg, sizeof(tmp));
     char *s=tmp; while(isspace((unsigned char)*s)) s++;
     char *e=s+strlen(s); while(e>s && isspace((unsigned char)e[-1])){ e--; *e=0; }
-    if(!*s){ put_str("error (bad sig)\n"); return; }
+    if(!*s || strlen(arg)>=sizeof(tmp) || !sig_shape_ok(s)){ put_str("error (bad sig)\n"); return; }
     uint32_t sel=abi_selector(s);
     put_str("0x");
     put_hex_byte((sel>>24)&0xFF); put_hex_byte((sel>>16)&0xFF); put_hex_byte((sel>>8)&0xFF); put_hex_byte(sel&0xFF);
@@ -320,7 +333,7 @@ static void handle_u256(const char *arg){
             if(numbuf[0]=='0'&&(numbuf[1]=='x'||numbuf[1]=='X')){
                 if(u256_parse_hex(&v,numbuf)!=0){ put_str("error (bad hex)\n"); return; }
             } else {
-                if(u256_parse_dec(&v,numbuf)!=0){ put_str("error (bad dec)\n"); return; }
+                if(!u256_dec_fits(numbuf) || u256_parse_dec(&v,numbuf)!=0){ put_str("error (bad dec)\n"); return; }
             }
             toks[ntok].kind=0; toks[ntok].num=v; ntok++;
             expect_operand=0;
@@ -596,7 +609,7 @@ static void handle_run(const char *arg){
     if(strchr(valuestr,'x')||strchr(valuestr,'X')){
         if(u256_parse_hex(&callvalue,valuestr)!=0){ put_str("error (bad value)\n"); return; }
     } else {
-        if(u256_parse_dec(&callvalue,valuestr)!=0){ put_str("error (bad value)\n"); return; }
+        if(!u256_dec_fits(valuestr) || u256_parse_dec(&callvalue,valuestr)!=0){ put_str("error (bad value)\n"); return; }
     }
 
     u256_t caller; u256_zero(&caller);
@@ -722,11 +735,18 @@ static int eth_eval(void){
 int main(void){
     for(;;){
         rv_ecall2(93,0,0,0);
-        int n=gather_call();
+        // The host moved an over-window call here (spill.py). Used once, and the capture is not read at all:
+        // a restart clears the circuit's capture while the reference's holds the call, so reading it would
+        // make the two machines run differently and fail the lockstep.
+        int spilled=eth_in[0]!=0;
+        int n=spilled?0:gather_call();
         put('\n');
         put(TOOL_RESPONSE);
         put('\n');
-        if(n<0){
+        if(spilled){
+            handle_cmd(eth_in);
+            eth_in[0]=0;
+        } else if(n<0){
             if(n==-2) put_str("error (too long)\n");
             else put_str("error\n");
         } else {

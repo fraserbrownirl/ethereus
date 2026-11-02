@@ -2,7 +2,7 @@
  "spec": "docs/finetune-spec-v1.md",
  "seed": 20261101,
  "firmware": "eth-bridge.elf",
- "firmware_sha256": "b320d31b4fd722ac0adfdbcf1313892967ea1bf8e826bd318138cb167c06c685",
+ "firmware_sha256": "8f07bfe35689e789010e0f5424b67d9ae616a3fb0532eb890af4d5a6fb4f099a",
  "chat_template_sha256": "a4aee8afcf2e0711942cf848899be66016f8d14a889ff9ede07bca099c28f715",
  "system_line": "Files under es/ hold the ethskills reference; before answering, list them and get whatever is relevant.",
  "tools": [
@@ -20,15 +20,14 @@
    "written": 800,
    "heldout": 80,
    "rejected": {
-    "over_window": 590,
-    "duplicate": 189,
-    "over_max_len": 9
+    "over_max_len": 13,
+    "duplicate": 234
    },
    "max_tokens": 8181,
    "variants": {
-    "opencode_tools": 233,
-    "plain": 556,
-    "opencode_system": 11
+    "opencode_tools": 227,
+    "plain": 558,
+    "opencode_system": 15
    },
    "sources": {}
   },
@@ -52,59 +51,60 @@
    "written": 200,
    "heldout": 20,
    "rejected": {
-    "over_window": 116,
-    "over_max_len": 3
+    "over_max_len": 7
    },
    "max_tokens": 8192,
    "variants": {
-    "plain": 144,
-    "opencode_tools": 51,
-    "opencode_system": 5
+    "plain": 147,
+    "opencode_tools": 49,
+    "opencode_system": 4
    },
    "sources": {}
   },
   "run": {
    "wanted": 400,
-   "written": 26,
-   "heldout": 2,
+   "written": 400,
+   "heldout": 40,
    "rejected": {
-    "over_window": 13721,
-    "duplicate": 3453
+    "over_max_len": 19,
+    "duplicate": 334
    },
-   "max_tokens": 6189,
+   "max_tokens": 8187,
    "variants": {
-    "plain": 17,
-    "opencode_tools": 9
+    "plain": 289,
+    "opencode_tools": 106,
+    "opencode_system": 5
    },
    "sources": {}
   },
   "files": {
    "wanted": 600,
-   "written": 361,
+   "written": 362,
    "heldout": 36,
    "rejected": {
-    "pool_exhausted": 24839
+    "pool_exhausted": 24838
    },
-   "max_tokens": 8186,
+   "max_tokens": 11892,
    "variants": {
-    "plain": 352,
-    "opencode_tools": 9
+    "opencode_tools": 69,
+    "plain": 287,
+    "opencode_system": 6
    },
    "sources": {
-    "es/oracles.md": 30,
-    "es/amm.md": 35,
-    "es/lending.md": 57,
-    "es/index.md": 58,
-    "es/vaults.md": 36,
-    "es/general.md": 69,
-    "es/amaster.md": 19,
-    "es/why.md": 10,
-    "es/blocks.md": 3,
-    "es/l2s.md": 18,
-    "es/standards.md": 8,
-    "es/wallets.md": 7,
-    "es/protocol.md": 9,
-    "es/gas.md": 2
+    "es/l2s.md": 21,
+    "es/gas.md": 4,
+    "es/oracles.md": 31,
+    "es/index.md": 53,
+    "es/vaults.md": 31,
+    "es/lending.md": 56,
+    "es/amaster.md": 17,
+    "es/amm.md": 39,
+    "es/general.md": 77,
+    "es/wallets.md": 8,
+    "es/why.md": 11,
+    "es/blocks.md": 2,
+    "es/protocol.md": 8,
+    "es/standards.md": 4
    }
   },
   "negative": {
@@ -133,25 +133,27 @@
    "rejected": {
     "pool_exhausted": 20699
    },
-   "max_tokens": 8185,
+   "max_tokens": 11904,
    "variants": {
-    "plain": 295,
-    "opencode_tools": 6
+    "plain": 230,
+    "opencode_tools": 68,
+    "opencode_system": 3
    },
    "sources": {
-    "es/protocol.md": 3,
-    "es/lending.md": 45,
-    "es/why.md": 5,
-    "es/l2s.md": 18,
-    "es/oracles.md": 18,
-    "es/amm.md": 54,
-    "es/index.md": 45,
-    "es/general.md": 58,
-    "es/vaults.md": 21,
-    "es/amaster.md": 15,
-    "es/wallets.md": 9,
-    "es/gas.md": 4,
-    "es/standards.md": 6
+    "es/vaults.md": 26,
+    "es/why.md": 4,
+    "es/index.md": 50,
+    "es/l2s.md": 15,
+    "es/oracles.md": 17,
+    "es/lending.md": 46,
+    "es/amm.md": 50,
+    "es/amaster.md": 17,
+    "es/wallets.md": 8,
+    "es/standards.md": 10,
+    "es/general.md": 50,
+    "es/gas.md": 3,
+    "es/blocks.md": 1,
+    "es/protocol.md": 4
    }
   }
  },
@@ -188,8 +190,9 @@
   "knowledge-00117"
  ],
  "knowledge_set": {
-  "examples": 662,
-  "distinct_answers": 468,
+  "examples": 663,
+  "distinct_answers": 481,
+  "distinct_source_lines": 429,
   "max_file_share": 0.192,
   "per_file": {
    "es/general.md": 127,
@@ -204,7 +207,7 @@
    "es/why.md": 15,
    "es/standards.md": 14,
    "es/protocol.md": 12,
-   "es/gas.md": 6,
+   "es/gas.md": 7,
    "es/blocks.md": 3
   }
  }

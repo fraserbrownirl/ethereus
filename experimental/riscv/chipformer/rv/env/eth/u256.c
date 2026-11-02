@@ -345,6 +345,18 @@ void u256_macc_small(u256_t *r, uint32_t mul, uint32_t add){
     uint64_t carry=add;
     for(int i=0;i<8;i++){ uint64_t t=(uint64_t)r->d[i]*mul+carry; r->d[i]=(uint32_t)t; carry=t>>32; }
 }
+int u256_dec_fits(const char *s){
+    while(isspace((unsigned char)*s)) s++;
+    if(*s=='-'||*s=='+') s++;
+    while(*s=='0') s++;
+    size_t n=0; const char *p=s;
+    while(isdigit((unsigned char)*p)){ n++; p++; }
+    if(n==0) return 1;
+    if(n>78) return 0;
+    if(n<78) return 1;
+    return strncmp(s, "115792089237316195423570985008687907853269984665640564039457584007913129639935", 78) <= 0;
+}
+
 int u256_parse_dec(u256_t *r, const char *s){
     static const uint32_t POW10[10]={1,10,100,1000,10000,100000,1000000,10000000,100000000,1000000000};
     while(isspace((unsigned char)*s)) s++;

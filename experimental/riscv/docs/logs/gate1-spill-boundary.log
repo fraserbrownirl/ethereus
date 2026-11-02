@@ -1,0 +1,6 @@
+boundary slice: 576 cases, 0 mismatches
+776 cases (encode 200), 0 mismatches (66.3 s), 0 rejected by design, asserted as errors
+  encode       200 cases     36516 instructions     69015 tokens  (1.89 tok/instr)
+  encode     window: 200 drawn, 119 over-80-tokens, 0 over-16B-row, 81 run
+GATE 1 PASS (ref machine == Python on all cases)
+GATE1_RC=0

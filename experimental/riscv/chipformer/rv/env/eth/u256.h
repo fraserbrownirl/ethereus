@@ -35,6 +35,7 @@ void u256_signextend(u256_t *r, const u256_t *a, uint32_t byte_index); // 0..31
 uint32_t u256_byte(const u256_t *a, uint32_t i); // byte i from LSB 0..31
 int u256_bitlen(const u256_t *a);
 int u256_parse_hex(u256_t *r, const char *s); // s hex with optional 0x, 0..64 nibbles
+int u256_dec_fits(const char *s); // a decimal literal's magnitude is at most 2**256-1
 int u256_parse_dec(u256_t *r, const char *s); // decimal, optional leading -, handles signed? returns 0 ok
 int u256_try_parse_auto(u256_t *r, const char *s); // hex if 0x else dec; handles negative decimal for signed context
 void u256_to_hex(const u256_t *a, char out[65]); // 64 hex chars no 0x, lowercase, no leading trim

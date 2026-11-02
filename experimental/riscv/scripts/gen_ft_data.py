@@ -3,7 +3,10 @@
 
 Every tool response comes from running the reference machine and the reference store, never typed.
 Each example is a full chat plus token segments: `train` is true only for tokens the model generates,
-so the circuit's output carries no loss. Calls over the 80-token window are rejected, not truncated.
+so the circuit's output carries no loss. A call over the 80-token window runs as serve.py runs it:
+long hex arguments move to the file buffer and the command to eth_in. Such a row trains the final
+answer against the rewritten history, and its call_segments train the full call up to </tool_call>.
+Calls the host cannot move are rejected, not truncated.
 
     python scripts/gen_ft_data.py [--scale 1.0] [--workers N] [--out data/ft1]
 
@@ -36,6 +39,7 @@ BUILTINS = json.loads((RV / "tests/data/rv/eth.builtins.json").read_text())
 A, B, S = (BUILTINS[k] for k in ("alice", "bob", "spender"))
 SEED = 20261101
 MAX_LEN = 8192  # the spec says 4096, but real OpenCode prompts alone are about 7,400 tokens
+MAX_LEN_OPENCODE_KNOWLEDGE = 12288  # a file body on top of that prompt; kept so these examples are not all plain
 SYSTEM = json.loads(SMOKE.read_text())["system_line"]
 COUNTS = {"abi": 800, "u256": 400, "create": 200, "run": 400, "files": 600, "negative": 594, "knowledge": 500}
 TOOLS = [ETH_TOOL, *ST.TOOLS]
@@ -135,17 +139,16 @@ def create(r):
         q = r.choice([f"What address does {d} deploy to at nonce {n}?",
                       f"Compute the CREATE address for deployer {d}, nonce {n}."])
         return q, [f"create {d} {n}"], lambda o: f"The contract address is `{o[0]}`."
-    salt, h = r.randint(0, 9999), "0x" + r.randbytes(32).hex()
+    salt, h = "0x" + word(r.randint(0, 9999)), "0x" + r.randbytes(32).hex()  # both must be 32 bytes
     q = f"Compute the CREATE2 address for deployer {d}, salt {salt}, init code hash {h}."
     return q, [f"create2 {d} {salt} {h}"], lambda o: f"The CREATE2 address is `{o[0]}`."
 
 
 def run(r):
-    """Calls on the built-in contracts' fixed state. Random addresses are valid: they hold 0 there."""
-    # Qwen spends a token per digit, so zero-padded words and digit-heavy addresses overflow the 80-token
-    # window: balanceOf(alice) takes 102. Letter-heavy addresses fit, and hold 0 on the fixture.
-    who = "0x" + "".join(r.choice("abcdefabcdef0123") for _ in range(40))
-    k = r.choice(["balance"] * 8 + ["supply", "decimals"])
+    """Calls on the built-in contracts' fixed state, with real addresses: alice, bob and the spender hold
+    state, random ones hold 0. Most calldata is over the window, so most of these rows spill."""
+    who = addr(r, 0.6)
+    k = r.choice(["balance"] * 4 + ["allowance"] * 2 + ["transfer", "approve", "supply", "decimals", "amm"])
 
     def ret(o):
         return o[-1].splitlines()[0] if o[-1].startswith("0x") else o[-1]
@@ -303,8 +306,8 @@ def init():
     G["kpool"] = knowledge_pool()
 
 
-def session():
-    return ST.StoreSession(G["T"], spill.parked(FW), G["cfg"], G["dev"])
+def session(fw=FW):
+    return ST.StoreSession(G["T"], spill.parked(fw), G["cfg"], G["dev"])
 
 
 def enc(text):
@@ -344,16 +347,25 @@ def finish(meta, user, steps, answer, r, plain=False):
     """steps: [(openai call, call ids, response ids)]. Builds the record with per-token loss flags."""
     ids, msgs, variant, names = prompt_ids(user, r, plain)
     segs = [{"role": "prompt", "train": False, "ids": ids}]
-    for call, cids, resp in steps:
-        segs.append({"role": "assistant_call", "train": True, "ids": cids})
+    call_segments = None
+    for call, cids, resp, *full in steps:
+        if full:  # serve.py: the model writes the full call, then the history holds the rewritten one
+            call_segments = [*segs, {"role": "assistant_call", "train": True, "ids": full[0]}]
+            segs.append({"role": "spill_prefill", "train": False, "ids": cids[:-1]})
+            segs.append({"role": "assistant_call", "train": True, "ids": cids[-1:]})
+        else:
+            segs.append({"role": "assistant_call", "train": True, "ids": cids})
         segs.append({"role": "tool_output", "train": False, "ids": resp})
         msgs.append({"role": "assistant", "content": "", "tool_calls": [{"type": "function", "function": call}]})
         msgs.append({"role": "tool", "content": tool_text(resp)})
     segs.append({"role": "assistant_final", "train": True, "ids": enc(answer) + [IM_END]})
     msgs.append({"role": "assistant", "content": answer})
     total = sum(len(s["ids"]) for s in segs)
-    if total > MAX_LEN:
+    knowledge = meta["family"] in ("files", "knowledge") and variant != "plain"
+    if total > (MAX_LEN_OPENCODE_KNOWLEDGE if knowledge else MAX_LEN):
         return None, "over_max_len"
+    if call_segments:
+        meta = {**meta, "spilled": True, "call_segments": call_segments}
     return {**meta, "messages": msgs, "prompt_variant": variant, "tools": names, "n_tokens": total, "segments": segs}, None
 
 
@@ -380,14 +392,21 @@ def make(job):
         ses, steps, outs = session(), [], []
         for cmd in cmds:
             cids = [T.TCO] + enc(spill.call_text(cmd)) + [T.TCC]
+            full = []
             if len(cids) - 2 > spill.WINDOW:
-                return None, "over_window"
+                new, files = spill.rewrite(cmd, lambda s: len(enc(s)))
+                if not files or len(new.encode()) >= spill.ETH_IN_SIZE:
+                    return None, "over_window"
+                fw = spill.firmware_with_files(FW, files, new)
+                ses = session(fw)
+                fw.unlink()
+                full, cids, cmd = [cids], [T.TCO] + enc(spill.call_text(new)) + [T.TCC], new
             resp = do_call(ses, cids)
             out = tool_text(resp)
             if out.startswith("error") and "overflow" not in out:
                 return None, "tool_error:" + out[:30]
             outs.append(out)
-            steps.append(({"name": "eth", "arguments": {"cmd": cmd}}, cids, resp))
+            steps.append(({"name": "eth", "arguments": {"cmd": cmd}}, cids, resp, *full))
         return finish({**meta, "tool_outputs": outs}, q, steps, answer(outs), r)
     except Exception as e:  # noqa: BLE001 - a bad draw is counted, not fatal
         return None, f"exception:{type(e).__name__}"
@@ -449,6 +468,39 @@ def question_ok(q, answer, smoke):
     return not leaks_smoke(q, smoke)
 
 
+def restatement_problems(final: str, fact: str, file: str, heading: str = "") -> list[str]:
+    """A final answer is written, not extracted, so everything checkable about it is checked against its source line:
+    it names the file, is one or two sentences, is not checklist voice, and adds no number or identifier."""
+    bad = []
+    if f"`{file}`" not in final:
+        bad.append("does not name the file")
+    if "\n" in final or "**" in final:
+        bad.append("not plain single-line text")
+    body = re.sub(r"`[^`]*`", "x", final.replace(f"`{file}`", "x"))
+    if len(re.findall(r"[.!?](?:\s|$)", re.sub(r"\b(?:e\.g|i\.e|vs|etc)\.", "x", re.sub(r"\d\.\d", "x", body)))) > 2:
+        bad.append("over two sentences")
+    if re.search(r"\b(?i:look for|watch for|look out|check for|watch out)\b|^- \[|(?<!`)\[[A-Z][^\]`]*\]", final):
+        bad.append("checklist voice")
+    fact = f"{heading} {fact}"
+    src = fact.lower().replace(",", "")
+    for t in re.findall(r"`([^`]+)`", final):
+        if t != file and t.lower() not in fact.lower():
+            bad.append(f"identifier not in the source: {t}")
+    for t in re.findall(r"\d[\d,.]*\d|\d", final.replace(file, "")):
+        if t.replace(",", "") not in src:
+            bad.append(f"number not in the source: {t}")
+    return bad
+
+
+def fit_final(question: str, final: str) -> str:
+    """One final serves all of a fact's questions, and a yes or no only answers some of them."""
+    if re.match(r"(?i)\s*(?:quick question: )?(what|why|how|which|when|where|who)\b", question):
+        m = re.match(r"(?:Yes|No)(?:[,:.] |, )(.*)", final, re.S)
+        if m:
+            return m[1][0].upper() + m[1][1:] if m[1][0] != "`" else m[1]
+    return final
+
+
 def knowledge_pool():
     """{family: [entry]} within the targets: every fact used before any fact repeats, and no file over its share.
     A fact whose heading has no other fact also gets a question built from the heading."""
@@ -462,7 +514,7 @@ def knowledge_pool():
         if heads[(f["file"], f["heading"])] == 1 and question_ok(f"What is the guidance on {f['heading']}?", f["answer"], smoke):
             qs.append(f"What is the guidance on {f['heading']}?")
         for n, q in enumerate(qs):
-            rounds.setdefault(n, []).append({"file": f["file"], "heading": f["heading"], "answer": f["answer"], "q": q})
+            rounds.setdefault(n, []).append({"file": f["file"], "heading": f["heading"], "answer": f["answer"], "final": f["final"], "q": q})
     total = COUNTS["files"] + COUNTS["knowledge"]
     cap = int(total * MAX_FILE_SHARE)
     chosen, used = [], Counter()
@@ -489,10 +541,12 @@ def make_knowledge(meta, family, i, r):
     cids = ST.StoreSession.call_tokens("get", enc(e["file"]))
     resp = do_call(ses, cids)
     steps.append(({"name": "get", "arguments": {"name": e["file"]}}, cids, resp))
-    if e["answer"] not in tool_text(resp).replace("**", ""):
+    if e["answer"] not in tool_text(resp).replace("**", "").replace("\n", " "):
         return None, "answer_not_in_file"
-    ans = f"{e['answer']}\n\n(Source: `{e['file']}`)"
-    m = {**meta, "source": e["file"], "answer": e["answer"], "question_source": "model"}
+    if restatement_problems(e["final"], e["answer"], e["file"], e["heading"]):
+        return None, "bad_restatement"
+    ans = fit_final(e["q"], e["final"])
+    m = {**meta, "source": e["file"], "answer": e["answer"], "final": ans, "question_source": "model"}
     row, why = finish(m, e["q"], steps, ans, r)
     if row is None and why == "over_max_len":  # the fact matters more than the prompt variant
         row, why = finish(m, e["q"], steps, ans, random.Random(0), plain=True)
@@ -574,17 +628,18 @@ def main():
             print(fam, man["families"][fam], flush=True)
     known = [json.loads(ln) for f in ("files", "knowledge") for ln in (out / f"{f}.jsonl").read_text().splitlines()]
     shares = Counter(x["source"] for x in known)
-    man["knowledge_set"] = {"examples": len(known), "distinct_answers": len({x["answer"] for x in known}),
+    man["knowledge_set"] = {"examples": len(known), "distinct_answers": len({x["final"] for x in known}), "distinct_source_lines": len({x["answer"] for x in known}),
                             "max_file_share": round(max(shares.values()) / len(known), 3) if known else None,
                             "per_file": dict(shares.most_common())}
     print("knowledge set", man["knowledge_set"], flush=True)
     (out / "manifest.json").write_text(json.dumps(man, indent=1) + "\n")
     lines = ["# Fine-tune knowledge examples, 30 for review\n",
-             "Generated by `scripts/gen_ft_data.py`. Questions are model-written; answers are extracted from the file and string-verified. Not yet used for training.\n"]
+             "Generated by `scripts/gen_ft_data.py`. Questions are model-written. The tool response is the raw file. The final answer is a written restatement; the script checks it names the file, runs to at most two sentences, and adds no number or identifier its source line lacks. Not yet used for training.\n"]
     for x in G.get("sample", []):
         lines += [f"## {x['id']}\n", f"Variant: {x['prompt_variant']}. Source: `{x['source']}`.\n", f"**Question:** {x['messages'][1]['content']}\n",
                   f"**Tool calls:** {', '.join(m['tool_calls'][0]['function']['name'] for m in x['messages'] if m.get('tool_calls'))}\n",
-                  f"**Answer (verbatim from the file):** {x['answer']}\n"]
+                  f"**Line in the file:** {x['answer']}\n",
+                  f"**Final answer:** {x['final']}\n"]
     if a.scale == 1.0:
         (RV.parents[1] / "docs/ft1-sample.md").write_text("\n".join(lines))
     print("GEN_DONE")
