@@ -9,7 +9,7 @@ Single list for the core repo and Route A; the Cursor agent and Muse are retired
 | Ethereus test, before the spill fix, three arms | done | | 2026-11-02 01:30 | 2026-11-02 01:44 | final answer exact, of 15: base 4, circuit 2, ceiling 5 |
 | Rerun three-call `serve.py` test on the eval VM, then Fraser can destroy 58623317 | done | | 2026-11-02 | 2026-11-02 | RESULT PASS, 3 of 3, 0 wrong on replay |
 | Environment pin check: gates log torch, transformers, fla, triton and driver; Results row goes amber on a difference from the pinned venv | done | | 2026-11-01 | 2026-11-01 | |
-| Canary: one command runs the three-call conversation with replay after any firmware, snapshot, driver or venv change | running | First run is part of the spill gates | 2026-11-01 | | |
+| Canary: one command runs the three-call conversation with replay after any firmware, snapshot, driver or venv change | done | | 2026-11-01 | 2026-11-02 | PASS on ELF 8f07bfe3 |
 | Artefact provenance in CI: rebuild every committed binary and compare loaded sections | done | | 2026-11-01 | 2026-11-01 | loaded bytes same, locally and on GitHub's runner; 130 author's files hashed |
 | Oracle independence test, by hand: one flipped keccak round-constant bit must fail gate 1 | done | | 2026-11-01 | 2026-11-01 | caught: keccak 40/40, create 37/40, selector 15/40 |
 | Malformed-input fuzz per command in gate 1, must give `error (...)` | done | | 2026-11-01 | 2026-11-01 | no crash; 6 lenient forms go with the spill fix |
