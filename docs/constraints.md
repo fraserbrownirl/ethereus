@@ -72,5 +72,7 @@ Rules for future work. Each line is the rule an accepted fix implies; the bracke
 - A scorer change is applied to every model compared, by rescoring saved rows, never only to the next run. (scorer fixed after ft1's run)
 - A Dockerfile step runs as the image's own user; the chain image already runs as `agent`. (`su agent` asked for a password and every task build failed)
 - A task's test suites never share a test function name; the local pre-filter rejects such a task before proof. (ETH Evals' `forge_checks.py` refused 3 dragonfly tasks: `Duplicate Forge check 'test_canCallWithValue'`)
+- Overloaded test functions count as repeated names too: the verifier drops the arguments before comparing. (all 15 Solady tasks refused: `Duplicate Forge check 'testBase58EncodeDecode'` within one suite)
+- Agent-visible task text avoids the lint's banned words (epoch, grader, rubric, score, benchmark, eval, being tested); the generator rejects such a candidate. (Solady `EmberUtils.sol` failed lint on `epoch`)
 - A run saves every field a later rescore needs, uncut: the final answer, the full command. (ft1's rows kept 2,000 characters, which cut answers after long file reads)
 

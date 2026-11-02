@@ -5,7 +5,7 @@ Single list for the core repo and Route A; the Cursor agent and Muse are retired
 | Task | State | Blocker | Crossing artefact | Started | Finished | Result |
 |---|---|---|---|---|---|---|
 | K3 merge: compiled layers into Kimi K3 (mixture-of-experts, gated delta), its gates | queued | Priority after ft1b's gates (Fraser, 2026-11-02); first step a feasibility note: weights, size, layer layout, where compiled layers fit in an MoE | firmware ELF 8f07bfe3 and the circuit; nothing from the 9B checkpoints | | | |
-| Task generator for step 3: Solidity build tasks scored by machines, three kinds, Harbor format, 50 proven per kind (Fraser) | running | Kind 1: 50 candidates (OpenZeppelin 15, Solady 15, Dragonfly 15, PRB 5); first proof batch 23 proven of 26 read; 3 refused for repeated test names, replaced, re-proof queued | none; uses OpenZeppelin v5.7.0 and real findings | 2026-11-02 | | |
+| Task generator for step 3: Solidity build tasks scored by machines, three kinds, Harbor format, 50 proven per kind (Fraser) | running | Kind 1: 30 proven (OpenZeppelin 15, dragonfly 15); Solady and PRB regenerating after three verifier and lint causes, then proof; Kinds 2 and 3 next | none; uses OpenZeppelin v5.7.0 and real findings | 2026-11-02 | | |
 | API and open call | blocked | Wait for K3: the flywheel pays off only on a model builders prefer (Fraser) | the K3 checkpoint | | | |
 | Fork batch: 7 mainnet-fork tasks, Internet, both arms | done | | none; needs the GPU only | 2026-11-01 17:30 | 2026-11-02 01:30 | 0 of 7 in both arms; totals 6 of 37 in both |
 | Judged batch: 6 judged tasks plus witness-string rerun, Internet, both arms | done | | none | 2026-11-01 13:28 | 2026-11-01 17:30 | 0 of 7 in both arms; totals 6 of 30 in both |
@@ -24,7 +24,7 @@ Single list for the core repo and Route A; the Cursor agent and Muse are retired
 | 4B evals on a rented L4, up to $0.50/h | blocked | Credit: $20.55 covers about 13 hours of the eval VM, which the fine-tune needs; start after a top-up | none; needs its own merged 4B checkpoint | | | |
 | `docs/ethevals-submission.md` final draft | queued | Needs both backbones' numbers | each arm's results folder | | | |
 | Fine-tune data generator, `scripts/gen_ft_data.py` | done | | ELF hash, snapshot pack | 2026-11-01 | 2026-11-02 | sample approved by Fraser; 60 `run_limit` rows added after |
-| Fine-tune training and evaluation, `docs/finetune-spec-v1.md` | running | ft1 failed KL against stock (0.075); ft1b training with the KL term; ft1 tool checks running | data/ft1 jsonl, base 9B, then q9-store-rv for apply | 2026-11-02 | | |
+| Fine-tune training and evaluation, `docs/finetune-spec-v1.md` | running | ft1b passed the KL and MMLU gate; smoke with files 11 of 20 (target 12); tool evaluation running, then the Ethereus test | data/ft1 jsonl, base 9B, then q9-store-rv for apply | 2026-11-02 | | |
 | Status console, `scripts/status_page.py` | done | | docs/status.html | 2026-11-01 | 2026-11-01 | |
 | Clean `.env`, `push_secrets.py` | done | | none | 2026-11-01 | 2026-11-01 | `eba5d52` |
 | No-key Internet run, circuit arm | done | | q9-rv2 | 2026-11-01 | 2026-11-01 | 6/24 tasks, 12/48 trials |

@@ -44,6 +44,8 @@ SOURCES = [
 # Comment lines that name a source project are dropped from every copied file.
 PROVENANCE = re.compile(r"openzeppelin|solady|vectorized|prb|razvan|dragonfly|github\.com|@author|@custom:security-contact", re.I)
 # Function names too common to rename safely: a global rename would also hit builtins and other contracts.
+# ETH Evals' lint (runner/ethevals/harbor_tasks.py AGENT_WORDS) refuses these in anything the agent sees
+AGENT_WORDS = re.compile(r"\b(?:epochs?|graders?|rubrics?|scores?|benchmarks?|evals?|being\s+tested)\b", re.IGNORECASE)
 STOP = {"encode", "decode", "push", "pop", "length", "call", "transfer", "send", "balance", "max", "min", "add", "sub",
         "mul", "div", "mod", "log", "set", "get", "remove", "contains", "at", "keys", "values", "toString"}
 ADJ = ["Amber", "Basalt", "Cobalt", "Dune", "Ember", "Flint", "Garnet", "Harbor", "Indigo", "Juniper", "Kestrel", "Lumen",
@@ -397,7 +399,13 @@ def main() -> int:
                     if d.exists():
                         shutil.rmtree(d)
                     tests_map = {t: t in failing for t in sorted(r0["checks"])}
-                    for p, text in task_files(name, spec, names, orig, hollow, tests_map).items():
+                    tf = task_files(name, spec, names, orig, hollow, tests_map)
+                    word = next((m.group() for p, text in tf.items() if p == "instruction.md" or p.startswith("environment/")
+                                 for m in [AGENT_WORDS.search(text)] if m), None)
+                    if word:
+                        manifest["rejected"][key] = f"agent-visible text holds a word the lint forbids: {word}"
+                        continue
+                    for p, text in tf.items():
                         (d / p).parent.mkdir(parents=True, exist_ok=True)
                         (d / p).write_text(text)
                     (d / "solution/solve.sh").chmod(0o755)
