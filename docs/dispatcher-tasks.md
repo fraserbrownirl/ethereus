@@ -14,7 +14,7 @@ Single list for the core repo and Route A; the Cursor agent and Muse are retired
 | Oracle independence test, by hand: one flipped keccak round-constant bit must fail gate 1 | done | | 2026-11-01 | 2026-11-01 | caught: keccak 40/40, create 37/40, selector 15/40 |
 | Malformed-input fuzz per command in gate 1, must give `error (...)` | done | | 2026-11-01 | 2026-11-01 | no crash; 6 lenient forms go with the spill fix |
 | `eth_in` firmware change, its gate 4, the spec's spill test | running | Running on the VM from `route-a-spill`; merge after they pass | 2026-11-01 | | |
-| Ethereus test, after the spill fix | queued | Last step of the spill gates | | | |
+| Ethereus test, after the spill fix | done | | 2026-11-02 | 2026-11-02 | final exact, of 15: circuit 3, base 4, ceiling 5; tool right: circuit 2 |
 | Regenerate `run` and calldata fine-tune families with real addresses | done | On branch `spill-eth-in`; regenerate if the firmware changes again | 2026-11-01 | 2026-11-01 | 763 spilled rows, all match an independent check; 56 create2 rows |
 | GPU test of `serve.py` store support | queued | Needs the GPU after the eval batches | | | |
 | +Skills arm on `q9-store-rv` | queued | Needs the GPU after the eval batches | | | |
