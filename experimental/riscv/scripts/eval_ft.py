@@ -26,7 +26,9 @@ def calls_in(text: str) -> list[tuple[str, dict]]:
 
 
 def after_last_response(text: str) -> str:
-    return text.rsplit("</tool_response>", 1)[-1]
+    """The model's own words after the last tool answer; empty when no answer closed (the limit cut inside a file),
+    since the file's text holds the very terms a final answer is checked for."""
+    return text.rsplit("</tool_response>", 1)[-1] if "</tool_response>" in text else ""
 
 
 def expected_call(row, decode=None) -> tuple[str, dict]:
@@ -116,9 +118,11 @@ def main() -> int:
     ap.add_argument("--fs", default=None)
     ap.add_argument("--data", default=str(RV / "data/ft1"))
     ap.add_argument("--out", required=True)
-    ap.add_argument("--max-new", type=int, default=1500)
+    ap.add_argument("--max-new", type=int, default=8000)  # a store file reads up to 6,382 tokens
     ap.add_argument("--limit", type=int, default=0)
     ap.add_argument("--rescore", action="store_true", help="recompute --out's summary from its saved rows")
+    ap.add_argument("--families", default="", help="comma list: only these held-out families (red flags still run unless --no-flags)")
+    ap.add_argument("--no-flags", action="store_true")
     ap.add_argument("--per-family", type=int, default=0, help="the first N held-out rows of each family, the same N for every model")
     a = ap.parse_args()
     if a.rescore:
@@ -136,7 +140,7 @@ def main() -> int:
     out = Path(a.out)
     out.mkdir(parents=True, exist_ok=True)
     rows = [json.loads(ln) for f in TOOL_FAMILIES for ln in (Path(a.data) / f"{f}.jsonl").read_text().splitlines()]
-    rows = [r for r in rows if r["split"] == "heldout"]
+    rows = [r for r in rows if r["split"] == "heldout" and (not a.families or r["family"] in a.families.split(","))]
     if a.per_family:
         seen = {}
         rows = [r for r in rows if seen.setdefault(r["family"], []).append(r) or len(seen[r["family"]]) <= a.per_family]
@@ -155,7 +159,7 @@ def main() -> int:
     flags = []
     prompts = json.loads((RV / "scripts/redflag_prompts.json").read_text())
     with open(out / "redflag.jsonl", "w") as fh:
-        for p in prompts[: a.limit or None]:
+        for p in [] if a.no_flags else prompts[: a.limit or None]:
             turn = eng.run([{"role": "user", "content": p}], a.max_new)
             f = {"prompt": p, "calls": [c[0] for c in calls_in(turn.text)], "text": turn.text[:800]}
             flags.append(f)
