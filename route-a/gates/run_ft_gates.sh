@@ -19,8 +19,8 @@ echo "FT_GATE2 exact=$(grep -c ' exact on ' $D/gpucheck.log) bad=$(grep -cE 'mis
 timeout 7200 $V -u $W/ethereus/route-a/gates/gate4.py $D $FW $D > $D/gate4.log 2>&1; echo "FT_GATE4_EXIT=$?"
 grep -aE '^\{|^GATE4|Traceback' $D/gate4.log | cut -c1-240
 timeout 21600 $V -u scripts/smoke_knowledge.py --model $D --fs $SNAP --out $D/smoke.json > $D/smoke.log 2>&1; echo "FT_SMOKE_EXIT=$?"; grep -a TOTAL $D/smoke.log
-timeout 14400 $V -u scripts/eval_ft.py --model $D --firmware $FW --fs $SNAP --out $D/eval > $D/eval.log 2>&1; echo "FT_EVAL_EXIT=$?"; grep -a '^EVAL_FT' $D/eval.log | cut -c1-500
-timeout 14400 $V -u scripts/eval_ft.py --model $B --firmware $FW --fs $SNAP --out $B/eval > $B/eval.log 2>&1; echo "BASE_EVAL_EXIT=$?"; grep -a '^EVAL_FT' $B/eval.log | cut -c1-500
+timeout 14400 $V -u scripts/eval_ft.py --model $D --firmware $FW --fs $SNAP --per-family 8 --out $D/eval > $D/eval.log 2>&1; echo "FT_EVAL_EXIT=$?"; grep -a '^EVAL_FT' $D/eval.log | cut -c1-500
+timeout 14400 $V -u scripts/eval_ft.py --model $B --firmware $FW --fs $SNAP --per-family 8 --out $B/eval > $B/eval.log 2>&1; echo "BASE_EVAL_EXIT=$?"; grep -a '^EVAL_FT' $B/eval.log | cut -c1-500
 O=$W/results/ethereus-test/ft1; mkdir -p $O
 timeout 14400 $V -u $W/ethereus/route-a/ethereus-test/run.py rv2 $D $FW $O/rv2.jsonl $R/tests/data/rv/eth.elf 2>&1 | grep -aE "tool |ARM_DONE|Traceback|Error"
 cp $W/results/ethereus-test/after/base.jsonl $W/results/ethereus-test/after/ceiling.jsonl $O/
