@@ -135,6 +135,7 @@ class Engine:
         self.lock = threading.Lock()
         self.system_line = system_line
         self.store_tools: list[dict] = []
+        self.ref_device = None
         if getattr(self.chat, "store_cfg", None) is not None:  # a store checkpoint: +Skills
             from chipformer.rv import store as ST
 
@@ -143,6 +144,10 @@ class Engine:
                 from chipformer.rv.chat import load_store_file
 
                 self.chat.store_snap = load_store_file(snapshot)
+                man = Path(snapshot).with_name("ethskills.manifest.json")
+                if man.exists():  # replay's reference holds the files the circuit was loaded with
+                    self.ref_device = ST.device_from_manifest(self.chat.T, json.loads(man.read_text()), self.chat.store_cfg,
+                                                              spill.parked(self.firmware))
 
     def _encode(self, s: str) -> list[int]:
         return self.chat.T.tok.encode(s, add_special_tokens=False).ids
@@ -221,9 +226,10 @@ class Engine:
         """chat.replay on each segment of a trace, on the machine that segment ran."""
         from chipformer.rv.chat import replay
 
+        kw = {"device": self.ref_device} if self.ref_device is not None else {}
         return [replay_segment(lambda g, s=s: replay(
                     self.chat, s["prompt_ids"], g,
-                    spill.firmware_with_files(self.firmware, s["files"], s.get("eth_in"))),
+                    spill.firmware_with_files(self.firmware, s["files"], s.get("eth_in")), **kw),
                 s, self.chat.T.TCC) for s in trace["segments"]]
 
 
@@ -298,8 +304,9 @@ def to_message(text: str, client_call: dict | None = None,
     calls, tools = [], []
     for i, m in enumerate(_TURN.finditer(text)):
         cid = f"call_{i}"
+        fn = _FN.search(m.group(1))
         calls.append({"id": cid, "type": "function", "function": {
-            "name": "eth", "arguments": json.dumps({"cmd": spill.parse_cmd(m.group(1)) or ""})}})
+            "name": fn.group(1).strip() if fn else "eth", "arguments": json.dumps(dict(_PARAM.findall(m.group(1))))}})
         tools.append({"role": "tool", "tool_call_id": cid, "content": m.group(2)})
     content = text if keep_ours else _TURN.sub("", text)
     content = re.sub(r"(?:\s*<\|(?:im_end|endoftext)\|>)+\s*$", "", content).strip()
