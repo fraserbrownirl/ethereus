@@ -147,3 +147,19 @@ Yes, two ways, both outside the router.
 - **Speed is the real cost.** Each circuit token passes the whole 93-layer model (about 50 to 80 B active
   parameters by the config's widths, against 9 B now), so a 100,000-token call that takes minutes on the 9B takes
   far longer on K3 even on 8 GPUs. Measure on stage 2 before planning stage 3.
+
+### Overwrite test: can KDA be RAM? (2026-11-02)
+
+`experimental/riscv/scripts/k3_kda_overwrite.py`: one cell overwritten 65,537 times by a de Bruijn sequence over
+0..255, so each ordered pair a -> b (a == b included) occurs once; each write is read back. K3's settings, FLA 0.6.0.
+
+| Kernel | In-kernel L2 norm | Transitions not bit-exact (of 65,536) | Reads wrong after rounding |
+|---|---|---|---|
+| `fused_recurrent_kda` (decode, token by token) | off | 0 | 0 |
+| `fused_recurrent_kda` | on (K3's setting) | 255, every a -> 0, residue about a x 1e-6 | 0 |
+| `chunk_kda` (prefill) | on or off | 31,069 | 25,541 |
+
+KDA is RAM in the token-by-token kernel. The chunked prefill kernel is not, for repeated overwrites of one cell
+within a chunk; the earlier random-write test missed this because it rarely wrote one row twice in a chunk. Circuit
+tokens must never take the chunk path. K3's modeling code uses `chunk` for any prefill; Kimi Linear uses the
+recurrent kernel up to 64 tokens. FlashKDA (Moonshot's production kernel) is being built for the same test.
