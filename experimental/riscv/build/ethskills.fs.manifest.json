@@ -21,7 +21,7 @@
   ],
   "token_count": 39880,
   "firmware": "eth-bridge.elf",
-  "firmware_sha256": "8f07bfe35689e789010e0f5424b67d9ae616a3fb0532eb890af4d5a6fb4f099a",
+  "firmware_sha256": "7c4175e66010f2b116bbbd4b45e1a5baba537de8692079ef5f046c115af14462",
   "store_cfg": {
     "slot_bits": 10,
     "n_chunks": 512,
