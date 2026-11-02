@@ -58,4 +58,5 @@ One line per tick: time (UTC), what changed. Spend is omitted because Fraser mon
 - 2026-11-02 01:30 Circuit fork batch: 0 of 7, 0 of 14 trials, 3 memory kills, 2 timeouts. Totals 6 of 37 on both arms, same 6. Both eval configurations are done, so the freeze condition is met; merge still waits for the before test and three-call rerun, per Fraser's order.
 - 2026-11-02 Root cause of cut answers found: the store adds a newline at each 100-token piece boundary, so `get` returns `0\n.93 ETH`. Serving has this too, not only training data. Fixing on `spill-eth-in` by packing at line ends.
 - 2026-11-02 01:44 Ethereus test before: final exact of 15, base 4, circuit 2, ceiling 5. `results/ethereus-test/before/summary.txt`. Circuit: 12 of 15 called, 0 right tool answers; slots all too long, calldata mostly bad syntax. Three-call rerun running.
+- 2026-11-02 Three-call rerun on the eval VM: RESULT PASS, 0 wrong on replay (`serve-test-evalvm.log`). Fraser can destroy 58623317 when he chooses. Spill gates started from `route-a-spill` with ELF 61355554 (`/workspace/spill-gates.log`). Environment pin OK. Tick back to 10 minutes.
 
