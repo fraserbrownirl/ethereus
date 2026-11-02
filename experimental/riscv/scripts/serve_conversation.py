@@ -67,6 +67,14 @@ def main() -> int:
         if j is not None and not j["ethereus"]["spilled"]:  # the spec's test is spilled: true
             print("FAIL spill case did not spill")
             bad += 1
+    if args.spill:  # the explicit form: the spilled bytes must come back decoded, not only spill
+        types = ",".join(["uint256"] * 10)
+        hexs = "0x" + "".join(f"{i * 7 + 1:064x}" for i in range(10))
+        want = "\n".join(str(i * 7 + 1) for i in range(10))
+        j = turn(f"Call eth with exactly this command, then stop: decode {types} {hexs}", "decode", want, [])
+        if j is not None and not j["ethereus"]["spilled"]:
+            print("FAIL explicit spill case did not spill")
+            bad += 1
     print("RESULT", "PASS" if not bad else f"FAIL {bad}")
     return 1 if bad else 0
 
