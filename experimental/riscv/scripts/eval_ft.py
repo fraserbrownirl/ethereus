@@ -87,7 +87,7 @@ def rescore(out: Path, data: Path, decode) -> dict:
     """The summary again from saved rows, with this scorer: every model is judged by the same rules. A spilled row
     saved without its full command is compared on the rewritten command, and reported as such."""
     rows = {json.loads(ln)["id"]: json.loads(ln) for f in TOOL_FAMILIES for ln in (data / f"{f}.jsonl").read_text().splitlines()}
-    res, approx = [], 0
+    res, approx, finals_kept = [], 0, 0
     for ln in (out / "heldout.jsonl").read_text().splitlines():
         x = json.loads(ln)
         r = rows[x["id"]]
@@ -95,10 +95,14 @@ def rescore(out: Path, data: Path, decode) -> dict:
         full = x.get("full_cmd")
         if x.get("spilled") and full is None:
             want, approx = rewritten_call(r), approx + 1
-        res.append(score_tool_row(r, x["text"], want, full))
+        y = score_tool_row(r, x["text"], want, full)
+        if "final_text" not in x and len(x["text"]) >= 2000:
+            y["final_ok"], finals_kept = x["final_ok"], finals_kept + 1  # text cut before the answer: keep the run's own verdict
+        res.append(y)
     flags = [json.loads(ln) for ln in (out / "redflag.jsonl").read_text().splitlines()]
     s = summarize(res, flags)
     s["spilled_rows_compared_on_rewritten_command"] = approx
+    s["finals_kept_from_the_run_because_text_was_cut"] = finals_kept
     return s
 
 
@@ -141,7 +145,7 @@ def main() -> int:
             first = turn.segments[0].get("gen_ids", [])
             full = spill.parse_cmd(decode(eng._visible(first))) if turn.spilled else None
             x = score_tool_row(r, turn.text, expected_call(r, decode), full)
-            x |= {"text": turn.text[:2000], "spilled": turn.spilled, "full_cmd": full, "lock_error": str(turn.lock_error) if turn.lock_error else None}
+            x |= {"text": turn.text[:2000], "final_text": after_last_response(turn.text)[-2000:], "spilled": turn.spilled, "full_cmd": full, "lock_error": str(turn.lock_error) if turn.lock_error else None}
             res.append(x)
             fh.write(json.dumps(x) + "\n")
             fh.flush()

@@ -71,4 +71,5 @@ Rules for future work. Each line is the rule an accepted fix implies; the bracke
 - A scorer judges the decisive call (the right file read, the right command), whatever comes before it, and compares spilled calls on their full command. (ft1's `files` and `run` rows were marked wrong for listing first and for spill's rewritten command)
 - A scorer change is applied to every model compared, by rescoring saved rows, never only to the next run. (scorer fixed after ft1's run)
 - A Dockerfile step runs as the image's own user; the chain image already runs as `agent`. (`su agent` asked for a password and every task build failed)
+- A run saves every field a later rescore needs, uncut: the final answer, the full command. (ft1's rows kept 2,000 characters, which cut answers after long file reads)
 
