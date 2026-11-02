@@ -213,6 +213,22 @@ def test_over_window_call_the_host_cannot_move_is_left_to_the_firmware():
     _over_window(lambda g: False)  # the circuit runs it and answers error (too long)
 
 
+def test_a_store_call_is_reported_as_itself():
+    text = ("<tool_call>\n<function=get>\n<parameter=name>\nes/a.md\n</parameter>\n</function>\n</tool_call>\n"
+            "<tool_response>\nbody\n</tool_response>\n<think>\n\n</think>\n\nDone.")
+    msg, tools = serve.to_message(text)
+    fn = msg["tool_calls"][0]["function"]
+    assert fn["name"] == "get" and json.loads(fn["arguments"]) == {"name": "es/a.md"}
+    assert tools[0]["content"] == "body"
+
+
+def test_an_eth_call_is_still_reported_as_eth():
+    text = ("<tool_call>\n<function=eth>\n<parameter=cmd>\nselector f()\n</parameter>\n</function>\n</tool_call>\n"
+            "<tool_response>\n0x26121ff0\n</tool_response>\n<think>\n\n</think>\n\nDone.")
+    fn = serve.to_message(text)[0]["tool_calls"][0]["function"]
+    assert fn["name"] == "eth" and json.loads(fn["arguments"]) == {"cmd": "selector f()"}
+
+
 def test_trailing_end_tokens_never_reach_the_answer():
     for end in ("<|im_end|>", "<|im_end|>\n<|endoftext|>", "<|endoftext|>\n"):
         assert serve.to_message("no" + end)[0]["content"] == "no"

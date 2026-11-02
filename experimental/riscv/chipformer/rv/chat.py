@@ -584,14 +584,22 @@ class RvChat:
         return self.tok.decode([i for i in ids if i < self.v0], skip_special_tokens=False)
 
 
-def replay(chat: RvChat, prompt: list[int], gen: list[int], firmware) -> dict:
+def replay(chat: RvChat, prompt: list[int], gen: list[int], firmware, device=None) -> dict:
     """Check a generated stream: the reference machine (fed Qwen's own tokens) must produce the
-    same chip tokens and echoes, and the IR circuit must predict every circuit-owned token."""
+    same chip tokens and echoes, and the IR circuit must predict every circuit-owned token.
+    ``device``: a reference store holding what ``chat.store_snap`` holds, for a loaded snapshot."""
     from chipformer.q35 import ir
 
     m = ref.Machine.from_program(elf.program(firmware))
     BR.park(m)
-    ses = BR.Session(chat.T, m)
+    if device is not None:
+        import copy
+
+        from chipformer.rv import store as ST
+
+        ses = ST.StoreSession(chat.T, m, chat.store_cfg, copy.deepcopy(device))
+    else:
+        ses = BR.Session(chat.T, m)
     stream = chat.to_stream(prompt + gen)
     # the prompt is prefilled history (its system prompt shows the tool-call format, so it holds
     # <tool_call> .. </tool_call> tokens: the circuit owns those </tool_call> positions, but no
@@ -619,9 +627,16 @@ def replay(chat: RvChat, prompt: list[int], gen: list[int], firmware) -> dict:
     m2 = ref.Machine.from_program(elf.program(firmware))
     BR.park(m2)
     core.snapshot(chat.c, m2)
+    inits = {}
+    if device is not None and chat.store_snap is not None:
+        for name, n in chat.c.store.persistent.items():
+            inits[name] = n.init
+            n.init = chat.store_snap.get(name)
     carry, mats = {}, []
     for a in range(0, len(stream), 2048):
         mats.append(ir.evaluate(chat.c, stream[a:a + 2048], carry=carry))
+    for name, v in inits.items():
+        chat.c.store.persistent[name].init = v
     mat = np.concatenate(mats)
     pred = core.predictions(chat.c, mat)
     own = np.rint(ir.ev(chat.c.owner, mat)).astype(int)

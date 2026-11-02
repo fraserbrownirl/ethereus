@@ -305,6 +305,17 @@ class StoreScan:
         return self.op is not None
 
 
+def device_from_manifest(text, man: dict, cfg: "Config", machine) -> "Device":
+    """A reference store holding a pack's files, as a snapshot booted from that pack does."""
+    s = StoreSession(text, machine, cfg)
+    s.qwen(text.encode("<|im_start|>assistant\nBooting.\n"))
+    for f in man["files"]:
+        name = text.encode(f["name"])
+        for i, piece in enumerate(f["pieces"]):
+            s.call("put" if i == 0 else "append", name, piece)
+    return s.dev
+
+
 class StoreSession(BR.Session):
     """bridge.Session with the object store: a store call's ``</tool_call>`` is answered by the
     store (the circuit owns its records and print), any other call runs the machine."""
