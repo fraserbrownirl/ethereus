@@ -186,6 +186,24 @@ def contract_names(text: str) -> list[str]:
     return re.findall(r"\b(?:contract|library|abstract\s+contract)\s+([A-Za-z_]\w*)", strip_comments(text))
 
 
+def unique_tests(text: str) -> str:
+    """Overloaded or repeated test functions get a numbered name: the verifier keys checks by name without arguments
+    and refuses a repeat (Solady pairs `testX()` with a fuzzed `testX(uint256)` throughout)."""
+    seen: dict[str, int] = {}
+
+    def sub(m):
+        n = m.group(2)
+        seen[n] = seen.get(n, 0) + 1
+        return m.group(1) + (n if seen[n] == 1 else f"{n}_{seen[n]}") + "("
+    return re.sub(r"(\bfunction\s+)(test\w*)\s*\(", sub, text)
+
+
+def helper_tests(text: str) -> str:
+    """A test helper's own test functions stop being tests: every suite inherits them, so two suites in one file
+    repeat the name (Solady's `TestPlus.test__codesize`)."""
+    return re.sub(r"(\bfunction\s+)test(\w*\s*\()", r"\1helper\2", text)
+
+
 def build_task(spec, root, test_file, files, target, fn, seed):
     """{path in the verifier's layout: text} for the renamed original and for the emptied version, plus names."""
     adj, noun = pick(seed, ADJ, 2)[0], pick(seed + "n", NOUN)[0]
@@ -237,14 +255,14 @@ def build_task(spec, root, test_file, files, target, fn, seed):
             natspec_start = min(natspec_start, fn["fstart"]) if natspec_start >= 0 else fn["fstart"]
             seg = text[natspec_start:fn["end"]]
             hollow_seg = text[natspec_start:fn["start"]] + HOLLOW  # emptied before renaming, so the cut is exact
-            for old, new in pmap.items():
-                seg = re.sub(rf"\b{re.escape(old)}\b", new, seg)
-                hollow_seg = re.sub(rf"\b{re.escape(old)}\b", new, hollow_seg)
+            for old, new in pmap.items():  # never after a dot: `x.offset` and `x.length` are members, not the parameter
+                seg = re.sub(rf"(?<!\.)\b{re.escape(old)}\b", new, seg)
+                hollow_seg = re.sub(rf"(?<!\.)\b{re.escape(old)}\b", new, hollow_seg)
             orig_text = text[:natspec_start] + seg + text[fn["end"]:]
             hollow_text = text[:natspec_start] + hollow_seg + text[fn["end"]:]
             del body, doc_start
         else:
-            orig_text = hollow_text = text
+            orig_text = hollow_text = unique_tests(text) if f == test_file else helper_tests(text) if "test" in f.lower() else text
         for which, t, store in (("o", orig_text, out_orig), ("h", hollow_text, out_hollow)):
             t = rename(t, f)
             t = rewrite_imports(spec, f, t, rename_file)

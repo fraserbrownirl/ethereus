@@ -75,6 +75,7 @@ Rules for future work. Each line is the rule an accepted fix implies; the bracke
 - A task's test suites never share a test function name; the local pre-filter rejects such a task before proof. (ETH Evals' `forge_checks.py` refused 3 dragonfly tasks: `Duplicate Forge check 'test_canCallWithValue'`)
 - Overloaded test functions count as repeated names too: the verifier drops the arguments before comparing. (all 15 Solady tasks refused: `Duplicate Forge check 'testBase58EncodeDecode'` within one suite)
 - Agent-visible task text avoids the lint's banned words (epoch, grader, rubric, score, benchmark, eval, being tested); the generator rejects such a candidate. (Solady `EmberUtils.sol` failed lint on `epoch`)
+- Repeated test names in a task's own test file are numbered, and a helper's inherited test functions lose the `test` prefix; renaming never touches a name after a dot. (Solady gave 0 tasks: overloaded fuzz tests, `TestPlus.test__codesize` in every suite, and `x.offset` renamed to `x.gamma1`)
 - A run saves every field a later rescore needs, uncut: the final answer, the full command. (ft1's rows kept 2,000 characters, which cut answers after long file reads)
 - A final answer is judged only on the model's words after a closed tool answer; a turn cut inside a file read has no final answer. (the scorer searched the whole turn, file text included, and passed ft1b file rows that never answered)
 - An evaluation's token limit covers the longest file the model may read, as the knowledge test's does. (tool evaluation ran at 1,500 tokens; files run to 6,382)
