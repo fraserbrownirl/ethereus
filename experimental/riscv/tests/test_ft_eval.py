@@ -63,3 +63,24 @@ def test_fifty_red_flag_prompts_none_about_ethereum():
     p = json.loads((RV / "scripts/redflag_prompts.json").read_text())
     assert len(p) == len(set(p)) == 50
     assert not [x for x in p if any(w in x.lower() for w in ("ethereum", "solidity", "token", "contract", "crypto", "blockchain", "keccak"))]
+
+
+def test_listing_before_the_right_read_is_not_a_miss():
+    row = {"id": "f", "family": "files", "answer": "x", "source": "es/a.md", "final": "Per `es/a.md`, x.",
+           "messages": [{"role": "assistant", "tool_calls": [{"function": {"name": "list", "arguments": {}}}]},
+                        {"role": "assistant", "tool_calls": [{"function": {"name": "get", "arguments": {"name": "es/a.md"}}}]}]}
+    want = E.expected_call(row)
+    assert want == ("get", {"name": "es/a.md"})
+    get = "<tool_call>\n<function=get>\n<parameter=name>\nes/a.md\n</parameter>\n</function>\n</tool_call>\n<tool_response>\nx\n</tool_response>\n"
+    lst = "<tool_call>\n<function=list>\n</function>\n</tool_call>\n<tool_response>\nes/a.md\n</tool_response>\n"
+    assert E.score_tool_row(row, get + "Per `es/a.md`, x.", want)["call_ok"]
+    assert E.score_tool_row(row, lst + get + "Per `es/a.md`, x.", want)["call_ok"]
+    assert not E.score_tool_row(row, lst + "Per `es/a.md`, x.", want)["call_ok"]
+
+
+def test_a_spilled_call_needs_the_right_full_command():
+    row = {"id": "r", "family": "run", "tool_outputs": ["0x01"],
+           "messages": [{"role": "assistant", "tool_calls": [{"function": {"name": "eth", "arguments": {"cmd": "run erc20 @spill/0"}}}]}]}
+    text = "<tool_call>\n<function=eth>\n<parameter=cmd>\nrun erc20 @spill/0\n</parameter>\n</function>\n</tool_call>\n<tool_response>\n0x01\n</tool_response>\n0x01"
+    assert E.score_tool_row(row, text, ("eth", {"cmd": "run erc20 0xab"}), full_cmd="run erc20 0xab")["call_ok"]
+    assert not E.score_tool_row(row, text, ("eth", {"cmd": "run erc20 0xab"}), full_cmd="run erc20 0xcd")["call_ok"]

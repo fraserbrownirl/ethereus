@@ -68,4 +68,7 @@ Rules for future work. Each line is the rule an accepted fix implies; the bracke
 - Generated names are valid Docker image tags: lowercase words joined by single hyphens. (`oz-base64-_encode` failed `docker compose`)
 - Task folders sent from the Mac carry no macOS metadata: `COPYFILE_DISABLE=1`, `--no-xattrs`. (lint failed on `._` files)
 - Generated tasks keep our own namespace; a lint rule that requires another organisation's name is satisfied on a scratch copy, never by relabelling. (`[task].name must use the buidlguidl org`)
+- A scorer judges the decisive call (the right file read, the right command), whatever comes before it, and compares spilled calls on their full command. (ft1's `files` and `run` rows were marked wrong for listing first and for spill's rewritten command)
+- A scorer change is applied to every model compared, by rescoring saved rows, never only to the next run. (scorer fixed after ft1's run)
+- A Dockerfile step runs as the image's own user; the chain image already runs as `agent`. (`su agent` asked for a password and every task build failed)
 

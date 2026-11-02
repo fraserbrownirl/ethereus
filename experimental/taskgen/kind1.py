@@ -36,10 +36,13 @@ SOURCES = [
      "src": "src", "test": "test", "remap": {}},
     {"key": "prb", "repo": "PaulRBerg/prb-math", "ref": "v4.1.0", "licence": "MIT", "root": "sources/prb-math",
      "src": "src", "test": "test", "remap": {"src/": "src/"}},
+    # solmate (AGPL) is not fetched, so a test that needs it fails to resolve and is dropped: no AGPL code in a task.
+    {"key": "dragonfly", "repo": "dragonfly-xyz/useful-solidity-patterns", "ref": "c989fc2", "licence": "MIT",
+     "root": "sources/dragonfly", "src": "patterns", "test": "test", "remap": {}},
 ]
 
 # Comment lines that name a source project are dropped from every copied file.
-PROVENANCE = re.compile(r"openzeppelin|solady|vectorized|prb|razvan|github\.com|@author|@custom:security-contact", re.I)
+PROVENANCE = re.compile(r"openzeppelin|solady|vectorized|prb|razvan|dragonfly|github\.com|@author|@custom:security-contact", re.I)
 # Function names too common to rename safely: a global rename would also hit builtins and other contracts.
 STOP = {"encode", "decode", "push", "pop", "length", "call", "transfer", "send", "balance", "max", "min", "add", "sub",
         "mul", "div", "mod", "log", "set", "get", "remove", "contains", "at", "keys", "values", "toString"}
@@ -199,10 +202,22 @@ def build_task(spec, root, test_file, files, target, fn, seed):
             text = re.sub(rf"\b{old}\b", new, text)
             text = re.sub(rf"\b{old}(?=\w*Test\b)", new, text)  # test contracts named after the library
         if new_fn != fn["name"]:
-            qual = "|".join(map(re.escape, lib_map.values()))
+            old = re.escape(fn["name"])
+            # Names this file reaches the target by: renamed libraries, and aliases of an import of the target file
+            # (free functions, as in `import "./Helpers.sol" as Helpers` or `import * as Helpers from ...`).
+            aliases, imports_target = list(lib_map.values()), False
+            for m in IMPORT.finditer(text):
+                if resolve(spec, f, m.group(2)) == target:
+                    imports_target = True
+                    al = re.search(r"\bas\s+([A-Za-z_]\w*)", m.group(0) + text[m.end():m.end() + 40].split(";")[0])
+                    if al:
+                        aliases.append(al.group(1))
+            qual = "|".join(map(re.escape, aliases))
             if qual:
-                text = re.sub(rf"\b({qual})\.{re.escape(fn['name'])}\b", rf"\1.{new_fn}", text)
-            if f == target or re.search(rf"\busing\s+({qual})\b", text):
+                text = re.sub(rf"\b({qual})\.{old}\b", rf"\1.{new_fn}", text)
+            if imports_target:  # `import {sqrt} from "..."` and its direct calls
+                text = re.sub(rf"(import\s*\{{[^}}]*?)\b{old}\b", rf"\g<1>{new_fn}", text)
+            if f == target or imports_target or (qual and re.search(rf"\busing\s+({qual})\b", text)):
                 text = re.sub(rf"(?<![\w.]){re.escape(fn['name'])}(?=\s*\()", new_fn, text)
                 text = re.sub(rf"\.{re.escape(fn['name'])}(?=\s*\()", f".{new_fn}", text)
         return text
@@ -306,7 +321,7 @@ def task_files(name, spec, names, orig, hollow, tests):
         FROM {IMAGE}
         WORKDIR /workspace
         COPY --chown=agent:agent workspace /workspace
-        RUN su agent -c "cd /workspace && forge build" && rm -rf /workspace/out /workspace/cache
+        RUN cd /workspace && forge build && forge clean
         ENTRYPOINT []
         CMD ["sleep", "infinity"]
         """)

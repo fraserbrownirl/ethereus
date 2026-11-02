@@ -30,12 +30,19 @@ def after_last_response(text: str) -> str:
 
 
 def expected_call(row, decode=None) -> tuple[str, dict]:
-    """The first call the row teaches. A spilled row's cmd holds @spill names; its full call is in call_segments."""
+    """The decisive call the row teaches: its last one (a `get` of the right file, or the `eth` command). For a spilled
+    row the full command, from call_segments, when a tokenizer is given; otherwise the rewritten one."""
+    fn = [m for m in row["messages"] if m.get("tool_calls")][-1]["tool_calls"][0]["function"]
     if row.get("call_segments") and decode is not None:
-        got = calls_in("<tool_call>" + decode(row["call_segments"][-1]["ids"]).split("<tool_call>", 1)[-1])
+        text = decode(row["call_segments"][-1]["ids"])
+        got = calls_in(text if "<tool_call>" in text else "<tool_call>" + text)
         if got:
-            return got[0]
-    fn = next(m for m in row["messages"] if m.get("tool_calls"))["tool_calls"][0]["function"]
+            return got[-1]
+    return fn["name"], fn["arguments"]
+
+
+def rewritten_call(row) -> tuple[str, dict]:
+    fn = [m for m in row["messages"] if m.get("tool_calls")][-1]["tool_calls"][0]["function"]
     return fn["name"], fn["arguments"]
 
 
@@ -49,12 +56,10 @@ def key_terms_kept(row, final: str) -> bool:
 def score_tool_row(row, text: str, want: tuple[str, dict], full_cmd=None) -> dict:
     """text: what the model and circuit wrote. full_cmd: the command before any spill rewrite, from the trace."""
     got = calls_in(text)
-    call_ok = False
-    if got:
-        name, args = got[0]
-        if full_cmd is not None and "cmd" in args:
-            args = {**args, "cmd": full_cmd}
-        call_ok = (name, args) == want
+    # Any of the model's calls may be the decisive one: listing files before the right `get` is not a miss, and going
+    # straight to it is not one either. A spilled call is compared on its full command when the trace gives it.
+    seen = [(n, {**a, "cmd": full_cmd} if (full_cmd is not None and "cmd" in a and "@spill/" in a["cmd"]) else a) for n, a in got]
+    call_ok = want in seen
     out = (row.get("tool_outputs") or [""])[-1].splitlines()
     head = out[0] if out else ""
     final_ok = bool(got) and bool(head) and head in after_last_response(text) and head in text.split("</tool_call>", 1)[-1]
@@ -78,6 +83,25 @@ def summarize(rows: list[dict], flags: list[dict]) -> dict:
             "pass": calls >= MIN_CALLS and finals >= MIN_FINALS and spurious == 0 and bool(flags)}
 
 
+def rescore(out: Path, data: Path, decode) -> dict:
+    """The summary again from saved rows, with this scorer: every model is judged by the same rules. A spilled row
+    saved without its full command is compared on the rewritten command, and reported as such."""
+    rows = {json.loads(ln)["id"]: json.loads(ln) for f in TOOL_FAMILIES for ln in (data / f"{f}.jsonl").read_text().splitlines()}
+    res, approx = [], 0
+    for ln in (out / "heldout.jsonl").read_text().splitlines():
+        x = json.loads(ln)
+        r = rows[x["id"]]
+        want = expected_call(r, decode)
+        full = x.get("full_cmd")
+        if x.get("spilled") and full is None:
+            want, approx = rewritten_call(r), approx + 1
+        res.append(score_tool_row(r, x["text"], want, full))
+    flags = [json.loads(ln) for ln in (out / "redflag.jsonl").read_text().splitlines()]
+    s = summarize(res, flags)
+    s["spilled_rows_compared_on_rewritten_command"] = approx
+    return s
+
+
 def main() -> int:
     ap = argparse.ArgumentParser()
     ap.add_argument("--model", required=True)
@@ -87,8 +111,17 @@ def main() -> int:
     ap.add_argument("--out", required=True)
     ap.add_argument("--max-new", type=int, default=1500)
     ap.add_argument("--limit", type=int, default=0)
+    ap.add_argument("--rescore", action="store_true", help="recompute --out's summary from its saved rows")
     ap.add_argument("--per-family", type=int, default=0, help="the first N held-out rows of each family, the same N for every model")
     a = ap.parse_args()
+    if a.rescore:
+        from tokenizers import Tokenizer
+
+        tok = Tokenizer.from_file(str(Path(a.model) / "tokenizer.json"))
+        s = rescore(Path(a.out), Path(a.data), lambda ids: tok.decode(ids, skip_special_tokens=False))
+        (Path(a.out) / "summary-rescored.json").write_text(json.dumps(s, indent=1))
+        print("EVAL_FT_RESCORED", "PASS" if s["pass"] else "FAIL", json.dumps(s), flush=True)
+        return 0 if s["pass"] else 1
     from chipformer.rv import serve, spill
 
     eng = serve.Engine(a.model, a.firmware, snapshot=a.fs)
@@ -108,7 +141,7 @@ def main() -> int:
             first = turn.segments[0].get("gen_ids", [])
             full = spill.parse_cmd(decode(eng._visible(first))) if turn.spilled else None
             x = score_tool_row(r, turn.text, expected_call(r, decode), full)
-            x |= {"text": turn.text[:2000], "spilled": turn.spilled, "lock_error": str(turn.lock_error) if turn.lock_error else None}
+            x |= {"text": turn.text[:2000], "spilled": turn.spilled, "full_cmd": full, "lock_error": str(turn.lock_error) if turn.lock_error else None}
             res.append(x)
             fh.write(json.dumps(x) + "\n")
             fh.flush()
