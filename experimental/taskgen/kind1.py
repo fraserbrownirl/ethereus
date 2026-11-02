@@ -95,6 +95,12 @@ def rewrite_test(text: str, contract_rel: str) -> str | None:
     return "\n".join(out) + "\n"
 
 
+def task_name(rel: str, fn: str) -> str:
+    """A name Docker accepts as an image tag: lowercase words joined by single hyphens."""
+    words = re.sub(r"[^a-z0-9]+", "-", f"oz {Path(rel).stem} {fn.strip('_')}".lower()).strip("-")
+    return words + ("-internal" if fn.startswith("_") else "")
+
+
 def test_names(text: str) -> list[str]:
     return re.findall(r"\bfunction\s+(test\w*)\s*\(", text)
 
@@ -230,7 +236,7 @@ def main() -> int:
             if not failing:
                 manifest["rejected"][key] = "no test fails when the body is gone"
                 continue
-            name = f"oz-{Path(rel).stem.lower()}-{fn['name'].lower()}"
+            name = task_name(rel, fn["name"])
             if (out / name).exists():
                 name += f"-{fn['start']}"
             files = task_files(name, rel, fn, original, hollowed, test_rel, test_text, set(failing), names)
