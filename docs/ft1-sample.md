@@ -24,7 +24,7 @@ Variant: plain. Source: `es/why.md`.
 
 **Line in the file:** Production-ready, actively deployed Q1 2026.
 
-**Final answer:** Yes, `es/why.md` says x402 is production-ready and was actively deployed in Q1 2026.
+**Final answer:** `es/why.md` says x402 is production-ready and was actively deployed in Q1 2026.
 
 ## knowledge-00016
 
@@ -216,7 +216,7 @@ Variant: plain. Source: `es/lending.md`.
 
 **Line in the file:** cETH has no `underlying()` function: Compound's cETH token doesn't implement `underlying()` (since its underlying is native ETH). Code that calls `cToken.underlying()` generically will revert on cETH. Look for: generic Compound integrations that call `underlying()` on all cTokens. [beirao AC-07]
 
-**Final answer:** No, `es/lending.md` says Compound's cETH has no `underlying()` function since its underlying is native ETH, so generic code calling `cToken.underlying()` on every cToken will revert on cETH.
+**Final answer:** `es/lending.md` says Compound's cETH has no `underlying()` function since its underlying is native ETH, so generic code calling `cToken.underlying()` on every cToken will revert on cETH.
 
 ## knowledge-00189
 

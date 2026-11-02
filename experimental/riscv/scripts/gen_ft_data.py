@@ -492,6 +492,15 @@ def restatement_problems(final: str, fact: str, file: str, heading: str = "") ->
     return bad
 
 
+def fit_final(question: str, final: str) -> str:
+    """One final serves all of a fact's questions, and a yes or no only answers some of them."""
+    if re.match(r"(?i)\s*(?:quick question: )?(what|why|how|which|when|where|who)\b", question):
+        m = re.match(r"(?:Yes|No)(?:[,:.] |, )(.*)", final, re.S)
+        if m:
+            return m[1][0].upper() + m[1][1:] if m[1][0] != "`" else m[1]
+    return final
+
+
 def knowledge_pool():
     """{family: [entry]} within the targets: every fact used before any fact repeats, and no file over its share.
     A fact whose heading has no other fact also gets a question built from the heading."""
@@ -536,8 +545,8 @@ def make_knowledge(meta, family, i, r):
         return None, "answer_not_in_file"
     if restatement_problems(e["final"], e["answer"], e["file"], e["heading"]):
         return None, "bad_restatement"
-    ans = e["final"]
-    m = {**meta, "source": e["file"], "answer": e["answer"], "final": e["final"], "question_source": "model"}
+    ans = fit_final(e["q"], e["final"])
+    m = {**meta, "source": e["file"], "answer": e["answer"], "final": ans, "question_source": "model"}
     row, why = finish(m, e["q"], steps, ans, r)
     if row is None and why == "over_max_len":  # the fact matters more than the prompt variant
         row, why = finish(m, e["q"], steps, ans, random.Random(0), plain=True)

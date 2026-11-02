@@ -96,6 +96,20 @@ def test_knowledge_final_is_a_checked_restatement_not_the_raw_text(data):
         assert r["answer"] in r["messages"][-2]["content"].replace("**", "").replace("\n", " ")  # the tool response stays raw
 
 
+def test_a_why_question_never_gets_a_yes_or_no(data):
+    sys.path.insert(0, str(RV / "scripts"))
+    sys.path.insert(0, str(RV))
+    import gen_ft_data as g
+
+    assert g.fit_final("Why does it revert?", "No, `es/a.md` says it reverts.") == "`es/a.md` says it reverts."
+    assert g.fit_final("What is it?", "Yes: per `es/a.md` it is x.") == "Per `es/a.md` it is x."
+    assert g.fit_final("Is it safe?", "No, `es/a.md` says not.") == "No, `es/a.md` says not."
+    assert g.fit_final("What is it?", "Notably `es/a.md` says x.") == "Notably `es/a.md` says x."
+    for r in data[0]:
+        if r["family"] in ("files", "knowledge") and r["messages"][1]["content"].split()[0] in ("What", "Why", "How", "Which", "When"):
+            assert not r["final"].startswith(("Yes", "No,", "No.", "No:"))
+
+
 def test_restatement_checker():
     sys.path.insert(0, str(RV / "scripts"))
     sys.path.insert(0, str(RV))
