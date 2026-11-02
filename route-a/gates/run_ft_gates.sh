@@ -8,7 +8,7 @@ git -C $W/ethereus-main log --format='main %h' -1
 $V $W/ethereus/route-a/gates/env_pin.py $W/ft1-env-pin.json
 $V scripts/train_ft.py apply --merged $B --lora $L --dst $D; echo "FT_APPLY_EXIT=$?"
 timeout 3600 $V -m chipformer.rv.textcheck $M $D --out $D/rv-text.json > $D/textcheck.log 2>&1; echo "FT_GATE1_EXIT=$?"
-$V -c "import json;d=json.load(open('$D/rv-text.json'));print('FT_GATE1 kl',d['kl_merged_mean'],'floor',d['kl_noise_floor_mean'],'ratio',d['kl_merged_mean']/d['kl_noise_floor_mean'],'greedy',d.get('greedy_match'),'/',d.get('greedy_n'))"
+$V -c "import json;d=json.load(open('$D/rv-text.json'));print('FT_GATE1 kl',d['kl_merged_mean'],'floor',d['kl_noise_floor_mean'],'ratio',d['kl_merged_mean']/d['kl_noise_floor_mean'],'greedy',sum(d['greedy_identical']),'/',len(d['greedy_identical']),'cap 0.0012')"
 timeout 3600 $V -u -m chipformer.rv.gpucheck --dtype bf16 --decode > $D/gpucheck.log 2>&1; echo "FT_GATE2_EXIT=$?"
 echo "FT_GATE2 exact=$(grep -c ' exact on ' $D/gpucheck.log) bad=$(grep -cE 'mismatch|not exact|Traceback' $D/gpucheck.log)"
 timeout 7200 $V -u $W/ethereus/route-a/gates/gate4.py $D $FW $D > $D/gate4.log 2>&1; echo "FT_GATE4_EXIT=$?"
