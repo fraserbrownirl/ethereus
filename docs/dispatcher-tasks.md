@@ -4,6 +4,10 @@ Single list for the core repo and Route A; the Cursor agent and Muse are retired
 
 | Task | State | Blocker | Crossing artefact | Started | Finished | Result |
 |---|---|---|---|---|---|---|
+| Step 1: Ethereus-9B-v0.1 to private HF repo `ethereus/Ethereus-9B-v0.1`, LoRA and hashes in `lora/`, sha256 check (Fraser) | blocked | Token file `/root/.harness/hf_token` on the VM | the merged checkpoint, `SHA256SUMS` | 2026-11-02 | | staged 26 files |
+| Step 2: eval build, spill on, unary fix, gate 1 (Fraser) | done | | ELF 7c4175e6, main 5f3b67b | 2026-11-02 | 2026-11-02 | spill test PASS 7 cases, 0 wrong on replay; gate 1 7,652/0 |
+| Step 3: ETH Evals, 37 tasks, 2 trials, OpenCode 1.18.33, real RPC: Ethereus-9B-v0.1 Internet and Internet + Skills, Qwen3.5-9B, Ethereus-9B (untrained) (Fraser) | queued | After Step 1; configuration question to Fraser | ELF 7c4175e6, the checkpoints | | | |
+| Step 4: `docs/ethevals-submission.md` draft for Fraser's review, nothing posted | queued | Step 3's results | each arm's results folder | | | |
 | Unary minus fix in eth firmware (Fraser, priority): port, gate slice, rebuild, gate 1, exposure list | done | | ELF 7c4175e6 (bridge), 7dcd8933 | 2026-11-02 | 2026-11-02 | gate 1 u256 7,652 cases, 0 mismatches; gate 4 6 of 6, 0 wrong on replay; canary PASS; snapshot verify OK; nothing to regenerate |
 | K3 merge: compiled layers into Kimi K3 (mixture-of-experts, gated delta), its gates | running | Feasibility note written (`docs/k3-feasibility.md`): four research items (no zero decay, `situ`, attention residuals, tokenizer); stages 0 to 2 on Mac and eval VM now; stage 3 needs 8x B200 class (Fraser: spend) | firmware ELF 8f07bfe3 and the circuit; nothing from the 9B checkpoints | | | |
 | Task generator for step 3: Solidity build tasks scored by machines, three kinds, Harbor format, 50 proven per kind (Fraser) | running | Kind 1 done: 50 proven, 8 held out (2 per source, `kind1-split.json`); Kind 2 generator (`kind2.py`) running on the Mac, OpenZeppelin first; proof needs an x86 Docker host once the VM stops | none; uses OpenZeppelin v5.7.0 and real findings | 2026-11-02 | | |
