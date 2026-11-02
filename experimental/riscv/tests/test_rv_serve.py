@@ -213,6 +213,15 @@ def test_over_window_call_the_host_cannot_move_is_left_to_the_firmware():
     _over_window(lambda g: False)  # the circuit runs it and answers error (too long)
 
 
+def test_the_system_line_joins_a_clients_system_message():
+    user = {"role": "user", "content": "hi"}
+    assert serve.with_system_line([user], None) == [user]
+    assert serve.with_system_line([user], "L") == [{"role": "system", "content": "L"}, user]
+    got = serve.with_system_line([{"role": "system", "content": "theirs"}, user], "L")
+    assert got == [{"role": "system", "content": "L\n\ntheirs"}, user]
+    assert sum(m["role"] == "system" for m in got) == 1
+
+
 def test_a_store_call_is_reported_as_itself():
     text = ("<tool_call>\n<function=get>\n<parameter=name>\nes/a.md\n</parameter>\n</function>\n</tool_call>\n"
             "<tool_response>\nbody\n</tool_response>\n<think>\n\n</think>\n\nDone.")

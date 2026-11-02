@@ -123,6 +123,15 @@ class Turn:
     client_call: dict | None = None
 
 
+def with_system_line(messages: list[dict], line: str | None) -> list[dict]:
+    """The chat template allows one system message, first, and a client may send its own: the line joins it."""
+    if not line:
+        return messages
+    if messages and messages[0].get("role") == "system":
+        return [{**messages[0], "content": f"{line}\n\n{messages[0].get('content') or ''}"}, *messages[1:]]
+    return [{"role": "system", "content": line}, *messages]
+
+
 class Engine:
     """One RvChat and its firmware, one generation at a time."""
 
@@ -167,8 +176,7 @@ class Engine:
         names = {t["function"]["name"] for t in mine}
         ours = names if client_tools else None
         client_tools = [t for t in client_tools if t.get("function", {}).get("name") not in names]
-        if self.system_line:
-            messages = [{"role": "system", "content": self.system_line}, *messages]
+        messages = with_system_line(messages, self.system_line)
         ids = chat.prompt_ids(messages, (*mine, *client_tools))
         turn = Turn(prompt_tokens=len(ids))
         n0, files, eth_in, left = len(ids), {}, None, max_new
