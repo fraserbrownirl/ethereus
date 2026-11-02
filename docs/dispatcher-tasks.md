@@ -17,11 +17,11 @@ Single list for the core repo and Route A; the Cursor agent and Muse are retired
 | Ethereus test, after the spill fix | done | | 2026-11-02 | 2026-11-02 | final exact, of 15: circuit 3, base 4, ceiling 5; tool right: circuit 2 |
 | Regenerate `run` and calldata fine-tune families with real addresses | done | On branch `spill-eth-in`; regenerate if the firmware changes again | 2026-11-01 | 2026-11-01 | 763 spilled rows, all match an independent check; 56 create2 rows |
 | GPU test of `serve.py` store support | done | | 2026-11-02 | 2026-11-02 | RESULT PASS, including an exact `get`, 0 wrong on replay |
-| +Skills arm on `q9-store-rv` | running | Internet mode, files in the weights, 37 tasks | 2026-11-02 | | |
+| +Skills arm on `q9-store-rv` | blocked | Stopped for training, 8 of 74 trials; resume after | 2026-11-02 | | |
 | 4B evals on a rented L4, up to $0.50/h | queued | After the 9B evals | | | |
 | `docs/ethevals-submission.md` final draft | queued | Needs both backbones' numbers | | | |
-| Fine-tune data generator, `scripts/gen_ft_data.py` | running | New sample with Fraser for review | 2026-11-01 | | |
-| Fine-tune training and evaluation, `docs/finetune-spec-v1.md` | queued | Trainer written, no GPU run. After the eval batches, the Ethereus test and Fraser's sample review | | | |
+| Fine-tune data generator, `scripts/gen_ft_data.py` | done | | 2026-11-01 | 2026-11-02 | sample approved by Fraser; 60 `run_limit` rows added after |
+| Fine-tune training and evaluation, `docs/finetune-spec-v1.md` | running | Short probe first, then the full run | 2026-11-02 | | |
 | Status console, `scripts/status_page.py` | done | | 2026-11-01 | 2026-11-01 | |
 | Clean `.env`, `push_secrets.py` | done | | 2026-11-01 | 2026-11-01 | `eba5d52` |
 | No-key Internet run, circuit arm | done | | 2026-11-01 | 2026-11-01 | 6/24 tasks, 12/48 trials |
