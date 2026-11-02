@@ -228,7 +228,7 @@ What gate 1 compares each command against, from `chipformer/rv/eth.py`.
 | command | oracle | source |
 | --- | --- | --- |
 | keccak | eth_hash | `expected_keccak` |
-| u256 | Python integers, mirroring the firmware's grammar | `expected_u256` |
+| u256 | Python integers, mirroring the firmware's grammar; plus a 5,652-case unary-minus slice checked against independently computed Python integers (2026-11-02) | `expected_u256` |
 | selector | eth_hash | `expected_selector` |
 | encode | eth_abi | `expected_encode` |
 | decode | eth_abi | `expected_decode` |
