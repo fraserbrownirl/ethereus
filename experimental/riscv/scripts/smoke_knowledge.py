@@ -61,6 +61,7 @@ def main() -> None:
     ap.add_argument("--questions", default=str(DEFAULT_QUESTIONS))
     ap.add_argument("--out", default="build/smoke_knowledge.json")
     ap.add_argument("--max-new", type=int, default=8000)  # the largest file is over 6,000 tokens; 400 cut answers off
+    ap.add_argument("--configs", default="base,fs", help="which halves to run, in order")
     ap.add_argument("--dry-run", action="store_true")
     args = ap.parse_args()
 
@@ -85,8 +86,11 @@ def main() -> None:
     snap = load_store_file(args.fs)
     firm = elf.program(args.firmware)
     results = {}
-    for cfg in ("base", "fs"):
+    out = Path(args.out)
+    out.parent.mkdir(parents=True, exist_ok=True)
+    for cfg in args.configs.split(","):
         rows = []
+        results[cfg] = {"score": None, "total": len(qs), "rows": rows}
         for i, q in enumerate(qs):
             m = ref.Machine.from_program(firm)
             BR.park(m)
@@ -109,7 +113,8 @@ def main() -> None:
             rows.append({"id": q["id"], "pass": ok,
                          "text_tokens": r["text_tokens"],
                          "seconds": round(r["seconds"], 1), "calls": calls,
-                         "answer": text[:600]})
+                         "answer": text[:600], "answer_end": text[-600:]})
+            out.write_text(json.dumps(results, indent=1))  # as it goes: a timeout keeps what ran
             print(f"[{cfg}] {i + 1:2d}/20 {'PASS' if ok else 'fail'} "
                   f"{q['id']:16s} {r['text_tokens']:4d}tok "
                   f"{r['seconds']:5.1f}s "
@@ -117,8 +122,6 @@ def main() -> None:
         score = sum(1 for x in rows if x["pass"])
         results[cfg] = {"score": score, "total": len(rows), "rows": rows}
         print(f"[{cfg}] TOTAL {score}/{len(rows)}")
-    out = Path(args.out)
-    out.parent.mkdir(parents=True, exist_ok=True)
     out.write_text(json.dumps(results, indent=1))
     print(f"wrote {out}")
 
