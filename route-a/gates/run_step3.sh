@@ -7,5 +7,5 @@ export ETHEREUS_API_KEY=$(< $W/serve.token)
 [ -f /root/.harness/mainnet_rpc ] && export MAINNET_RPC_URL=$(< /root/.harness/mainnet_rpc)
 [ -s /root/.exa_key ] && export EXA_API_KEY=$(tr -d ' \n' < /root/.exa_key)
 TASKS=(); [ $# -gt 0 ] && TASKS=(--tasks "$@")
-uv run --frozen ethevals run --config $W/ethereus/route-a/gates/job-step3.yaml --agents $AG --modes $MODE --n-attempts 2 --budget ${BUDGET:-600} --output $W/results/$OUT "${TASKS[@]}"
+uv run --frozen ethevals run --config $W/ethereus/route-a/gates/job-step3.yaml --agents $AG --modes $MODE --n-attempts ${N:-2} --budget ${BUDGET:-600} --output $W/results/$OUT "${TASKS[@]}"
 echo "RUN_EXIT=$? $OUT"
