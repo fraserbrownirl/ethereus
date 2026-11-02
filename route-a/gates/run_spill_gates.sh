@@ -1,7 +1,7 @@
 #!/bin/bash
 # After the freeze lifts: the eth_in firmware on both checkpoints. Start by hand once both eval configurations,
 # the before test and the three-call rerun have been read. Never stops early: every step's result is reported.
-W=/workspace; V=$W/venv/bin/python; RV=$W/ethereus/experimental/riscv; D=$W/ethereus/dist/q9-rv2; R=$D/gate4-spill; WANT=61355554d4b9fd71988f0d2d7c97736c4158f7c6e578ceae149daf395dcb9aae
+W=/workspace; V=$W/venv/bin/python; RV=$W/ethereus/experimental/riscv; D=$W/ethereus/dist/q9-rv2; R=$D/gate4-spill; WANT=8f07bfe35689e789010e0f5424b67d9ae616a3fb0532eb890af4d5a6fb4f099a
 FW=$RV/tests/data/rv/eth-bridge.elf; MR=$W/ethereus-main/experimental/riscv
 ps -eo pid,args | grep "[c]hipformer.rv.serve:from_env" | awk '{print $1}' | while read p; do kill $p; done; sleep 5
 git -C $W/ethereus fetch -q origin && git -C $W/ethereus checkout -q route-a-spill && git -C $W/ethereus pull -q --ff-only origin route-a-spill
