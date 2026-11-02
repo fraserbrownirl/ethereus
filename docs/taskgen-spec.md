@@ -21,7 +21,9 @@ Fraser, 2026-11-02. Step 3 is training the model to build: Solidity tasks scored
 
 ## Kind 1
 
-Source: OpenZeppelin Contracts v5.7.0 (MIT), the most deployed Solidity library, and its Foundry tests (`test/**/*.t.sol`). Each task empties one function body in the library file a test file covers. The container clones v5.7.0, as ETH Evals' own tasks do, and copies the emptied file over it. The checks are that test file, with imports pointed at the workspace. A candidate needs the original to pass every test and the emptied version to fail at least one.
+Fraser, 2026-11-02: several MIT sources, none over 30% of the tasks (15 of 50); contracts, functions and their parameters renamed per task so the original is not recognisable; training runs with no network.
+
+Sources so far: OpenZeppelin Contracts v5.7.0, solady 258f67c, PRBMath v4.1.0, all MIT, at most 15 tasks each; a fourth is needed to reach 50. For a test file, the files it imports are copied: project sources into `workspace/src`, test helpers into `tests/`. One function in one of those sources is emptied, the library holding it, the function and its parameters get new names, and comment lines that name the source project are dropped. The container holds only these files: no clone, no git history, no original. `[agent] network_mode = "no-network"`; the image compiles once at build time so the compiler is present offline. A candidate needs the renamed original to pass every test and the emptied version to fail at least one. Documentation text stays, since it defines the behaviour.
 
 ## Layout
 

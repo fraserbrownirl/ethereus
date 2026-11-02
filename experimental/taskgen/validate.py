@@ -37,6 +37,23 @@ def forge_layout(root: Path, oz: Path, lib: str, overrides: dict[str, str], test
     return root
 
 
+def layout(root: Path, files: dict[str, str]) -> Path:
+    """root/{workspace, tests, foundry.toml} holding exactly these files (paths relative to root). Kept between
+    candidates so Forge's cache carries; files from the previous call that are not in this one are removed."""
+    state = root / ".files.json"
+    for rel in json.loads(state.read_text()) if state.exists() else []:
+        if rel not in files and (root / rel).exists():
+            (root / rel).unlink()
+    for rel, text in files.items():
+        p = root / rel
+        p.parent.mkdir(parents=True, exist_ok=True)
+        if not p.exists() or p.read_text() != text:
+            p.write_text(text)
+    state.write_text(json.dumps(sorted(files)))
+    (root / "foundry.toml").write_text(VERIFY + "remappings = " + json.dumps([f"forge-std/={FORGE_STD}/"]) + "\n")
+    return root
+
+
 def run(root: Path, timeout: int = 1800) -> dict:
     """{compiled, reason, checks: {name: {passed, reason}}}, the way forge_checks.py reads Forge's JSON."""
     try:
