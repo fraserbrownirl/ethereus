@@ -75,6 +75,13 @@ def main() -> int:
         if j is not None and not j["ethereus"]["spilled"]:
             print("FAIL explicit spill case did not spill")
             bad += 1
+    if args.spill:  # the spec's second spill case: run erc20 with real calldata, on an address that holds a balance
+        builtins = json.loads((Path(args.firmware).parent / "eth.builtins.json").read_text())
+        cd = "0x70a08231" + "0" * 24 + builtins["alice"][2:].lower()
+        j = turn(f"Call eth with exactly this command, then stop: run erc20 {cd}", "run erc20", f"{1000:064x}", [])
+        if j is not None and not j["ethereus"]["spilled"]:
+            print("FAIL run case did not spill")
+            bad += 1
     print("RESULT", "PASS" if not bad else f"FAIL {bad}")
     return 1 if bad else 0
 
