@@ -38,8 +38,11 @@ class Lora(nn.Module):
         self.B = nn.Parameter(torch.zeros(base.out_features, rank, device=base.weight.device))
         nn.init.kaiming_uniform_(self.A, a=math.sqrt(5))
         self.scale = ALPHA / rank
+        self.enabled = True
 
     def forward(self, x):
+        if not self.enabled:  # the stock model, for the KL term's reference
+            return self.base(x)
         d = (x.float() @ self.A.T) @ self.B.T * self.scale
         return self.base(x) + d.to(x.dtype)
 
@@ -126,6 +129,32 @@ def labelled(ex, group) -> int:
     return sum(sum(x != -100 for x in ex[i][1][1:]) for i in group)
 
 
+def set_enabled(loras, on: bool) -> None:
+    for m in loras.values():
+        m.enabled = on
+
+
+def kl_to_stock(text_model, head, loras, seqs, dev, pad, backward: float | None) -> float:
+    """Mean per-token KL(stock || tuned) over general text. Stock is the same model with the LoRA off, so no second copy.
+    Fraser, 2026-11-02: the fine-tune gate is KL against stock on generic prompts, so training pays for drift directly."""
+    n = max(len(s) for s in seqs)
+    ids = torch.full((len(seqs), n), pad, device=dev)
+    mask = torch.zeros((len(seqs), n), dtype=torch.long, device=dev)
+    for j, s in enumerate(seqs):
+        ids[j, :len(s)] = torch.tensor(s, device=dev)
+        mask[j, :len(s)] = 1
+    keep = mask.bool()
+    with torch.no_grad():
+        set_enabled(loras, False)
+        ref = torch.log_softmax(head(text_model(input_ids=ids, attention_mask=mask, use_cache=False).last_hidden_state[keep]).float(), -1)
+        set_enabled(loras, True)
+    cur = torch.log_softmax(head(text_model(input_ids=ids, attention_mask=mask, use_cache=False).last_hidden_state[keep]).float(), -1)
+    kl = (ref.exp() * (ref - cur)).sum(-1).mean()
+    if backward is not None:
+        (kl * backward).backward()
+    return kl.item()
+
+
 def save_lora(loras: dict[str, Lora], path: Path, prefix: str = "") -> None:
     from safetensors.torch import save_file
 
@@ -136,7 +165,7 @@ def save_lora(loras: dict[str, Lora], path: Path, prefix: str = "") -> None:
     save_file(sd, str(path), metadata={"alpha": str(ALPHA), "rank": str(RANK)})
 
 
-def run_training(text_model, head, tr, ho, a, dev, pad, log) -> dict[str, Lora]:
+def run_training(text_model, head, tr, ho, a, dev, pad, log, general=None) -> dict[str, Lora]:
     loras = wrap(text_model)
     text_model.gradient_checkpointing_enable(gradient_checkpointing_kwargs={"use_reentrant": False})
     text_model.enable_input_require_grads()
@@ -155,6 +184,13 @@ def run_training(text_model, head, tr, ho, a, dev, pad, log) -> dict[str, Lora]:
                 lab += labelled(ho, g)
         return tot / max(lab, 1)
 
+    def general_kl():
+        if not general:
+            return None
+        with torch.no_grad():
+            ks = [kl_to_stock(text_model, head, loras, general[i:i + a.kl_batch], dev, pad, None) for i in range(0, min(len(general), 64), a.kl_batch)]
+        return sum(ks) / len(ks)
+
     log({"before_training_heldout_loss": heldout()})
     for epoch in range(a.epochs):
         text_model.train()
@@ -164,21 +200,53 @@ def run_training(text_model, head, tr, ho, a, dev, pad, log) -> dict[str, Lora]:
                 pg["lr"] = lr
             d = max(1, labelled(tr, g))
             s = loss_sum(text_model, head, tr, g, a.micro_tokens, pad, dev, backward=d)
+            k = None
+            if general and getattr(a, "kl_weight", 0):
+                k = kl_to_stock(text_model, head, loras, rng.sample(general, min(a.kl_batch, len(general))), dev, pad, backward=a.kl_weight)
             nn.utils.clip_grad_norm_(params, 1.0)
             opt.step()
             opt.zero_grad(set_to_none=True)
             step += 1
             if step % a.log_every == 0 or step == n:
                 mem = torch.cuda.max_memory_allocated() / 2**30 if torch.cuda.is_available() else 0
-                log({"step": step, "of": n, "epoch": epoch, "loss": s / d, "lr": lr, "minutes": (time.time() - t0) / 60, "peak_gib": round(mem, 1)})
+                log({"step": step, "of": n, "epoch": epoch, "loss": s / d, "kl_to_stock": k, "lr": lr, "minutes": (time.time() - t0) / 60, "peak_gib": round(mem, 1)})
             if step % a.save_every == 0:
                 Path(a.out).mkdir(parents=True, exist_ok=True)
                 save_lora(loras, Path(a.out) / "lora-latest.safetensors")
-        log({"epoch_done": epoch, "heldout_loss": heldout()})
+        log({"epoch_done": epoch, "heldout_loss": heldout(), "general_kl_to_stock": general_kl()})
         Path(a.out).mkdir(parents=True, exist_ok=True)
         save_lora(loras, Path(a.out) / f"lora-epoch{epoch + 1}.safetensors")
     save_lora(loras, Path(a.out) / "lora.safetensors")
     return loras
+
+
+def general_text(a, log) -> list[list[int]]:
+    """Instruction and answer pairs from Dolly (CC-BY-SA-3.0), chat-formatted with thinking off as the evals run, capped
+    in length. Nothing Ethereum-related, and never the gate's own prompts (chipformer.q35.report.PROMPTS)."""
+    import json as _json
+
+    from huggingface_hub import hf_hub_download
+    from transformers import AutoTokenizer
+
+    from chipformer.q35.report import PROMPTS
+
+    tok = AutoTokenizer.from_pretrained(a.base)
+    gate = {t.strip().lower() for _, t in PROMPTS}
+    bad = ("ethereum", "blockchain", "crypto", "token", "solidity", "bitcoin", "smart contract", "wallet")
+    rows = [_json.loads(x) for x in open(hf_hub_download("databricks/databricks-dolly-15k", "databricks-dolly-15k.jsonl", repo_type="dataset"))]
+    random.Random(a.seed).shuffle(rows)
+    out = []
+    for r in rows:
+        q, ans = r["instruction"].strip(), r["response"].strip()
+        if not q or not ans or q.lower() in gate or any(b in (q + ans).lower() for b in bad):
+            continue
+        ids = tok.apply_chat_template([{"role": "user", "content": q}, {"role": "assistant", "content": ans}], tokenize=True, enable_thinking=False)
+        ids = list(ids if isinstance(ids, list) else ids["input_ids"])[: a.kl_len]
+        out.append(ids)
+        if len(out) >= a.kl_rows:
+            break
+    log({"general_rows": len(out), "source": "databricks/databricks-dolly-15k"})
+    return out
 
 
 def cmd_train(a) -> int:
@@ -207,7 +275,8 @@ def cmd_train(a) -> int:
     log({"train_rows": len(tr_rows), "heldout_rows": len(ho_rows), "train_seq": len(tr), "heldout_seq": len(ho),
          "firmware_sha256": man.get("firmware_sha256"), "epochs": a.epochs, "lr": a.lr, "batch": a.batch})
     pad = model.config.get_text_config().eos_token_id
-    run_training(text, head, tr, ho, a, dev, pad[0] if isinstance(pad, list) else pad, log)
+    general = general_text(a, log) if a.kl_weight else None
+    run_training(text, head, tr, ho, a, dev, pad[0] if isinstance(pad, list) else pad, log, general)
     return 0
 
 
@@ -292,6 +361,10 @@ def main() -> int:
     t.add_argument("--log-every", type=int, default=5)
     t.add_argument("--limit-rows", type=int, default=0)
     t.add_argument("--save-every", type=int, default=50)
+    t.add_argument("--kl-weight", type=float, default=0.0, help="weight of KL(stock || tuned) on general text; 0 is off")
+    t.add_argument("--kl-batch", type=int, default=4)
+    t.add_argument("--kl-rows", type=int, default=2000)
+    t.add_argument("--kl-len", type=int, default=512)
     p = sub.add_parser("apply")
     p.add_argument("--merged", required=True)
     p.add_argument("--lora", required=True)

@@ -118,3 +118,37 @@ def test_training_on_a_tiny_real_qwen_lowers_loss_and_never_moves_the_base(tmp_p
     for name, lo in loras.items():
         assert torch.equal(lo.base.weight, before[f"model.{name}.weight"])
     assert torch.equal(m.lm_head.weight, before["lm_head.weight"])
+
+
+def _tiny():
+    from transformers import Qwen3_5ForCausalLM, Qwen3_5TextConfig
+
+    cfg = Qwen3_5TextConfig(vocab_size=64, hidden_size=32, intermediate_size=64, num_hidden_layers=2, num_attention_heads=2, num_key_value_heads=2,
+                            linear_num_key_heads=2, linear_num_value_heads=2, layer_types=["linear_attention", "full_attention"], tie_word_embeddings=False)
+    torch.manual_seed(0)
+    return Qwen3_5ForCausalLM(cfg).float()
+
+
+def test_kl_to_stock_is_zero_before_training_and_the_lora_switch_restores_stock():
+    m = _tiny()
+    loras = F.wrap(m.model)
+    general = [list(range(3, 20)), list(range(30, 40))]
+    assert F.kl_to_stock(m.model, m.lm_head, loras, general, "cpu", 0, None) < 1e-6
+    for lo in loras.values():
+        torch.nn.init.normal_(lo.B, std=0.5)
+    assert F.kl_to_stock(m.model, m.lm_head, loras, general, "cpu", 0, None) > 1e-4
+    assert all(lo.enabled for lo in loras.values())
+
+
+def test_the_kl_term_holds_the_model_closer_to_stock(tmp_path):
+    seq = list(range(5, 25))
+    ex = [(seq, [-100] * 10 + seq[10:])] * 4
+    general = [list(range(30, 50)), list(range(40, 60))]
+    kls = {}
+    for w in (0.0, 5.0):
+        m = _tiny()
+        a = Namespace(lr=3e-3, batch=2, epochs=6, micro_tokens=1000, seed=0, log_every=1, save_every=100, out=str(tmp_path / f"o{w}"),
+                      kl_weight=w, kl_batch=2)
+        loras = F.run_training(m.model, m.lm_head, ex, ex, a, "cpu", 0, lambda d: None, general)
+        kls[w] = F.kl_to_stock(m.model, m.lm_head, loras, general, "cpu", 0, None)
+    assert kls[5.0] < kls[0.0]

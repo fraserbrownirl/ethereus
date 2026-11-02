@@ -57,7 +57,7 @@ Hold out 10% by family. Also hold out the 20 smoke-test questions entirely — t
 | Check | Pass |
 | --- | --- |
 | Chip-layer tensors | sha256 identical to `q9-store-rv` |
-| Gate 1 textcheck vs **base Qwen3.5-9B** | KL ≤ 2× the 4B's 6e-4 (it will rise; cap it) |
+| Fine-tune gate (Fraser, 2026-11-02, replaces gate 1's cap here) | KL against stock Qwen3.5-9B ≤ 0.05 on generic prompts (`textcheck`), **and** MMLU-500 within 1 point of stock (`scripts/eval_mmlu.py`, or DMind held-out). The 2×6e-4 cap is a merge test, not a fine-tune test; it stays for merges. |
 | Gate 2 | 18/18 exact |
 | Gate 4 | 6/6 clean, prompt 6 now calls `run` |
 | Snapshot verify | 136/136 |
@@ -67,7 +67,7 @@ Hold out 10% by family. Also hold out the 20 smoke-test questions entirely — t
 | ETH Evals Concepts, circuit arm | tool calls > 0 in the run; score ≥ base (a tie is acceptable, a drop is not) |
 | Red-flag check | on 50 non-Ethereum prompts, 0 spurious tool calls |
 
-If gate 1 KL exceeds the cap or the red-flag check fails, lower the LoRA rank or drop epoch 2; do not loosen the checks.
+If the fine-tune gate or the red-flag check fails, add or raise the KL-to-stock term (`train_ft.py --kl-weight`), lower the LoRA rank, or drop epoch 2; do not loosen the checks. (Fraser, 2026-11-02: ft1 epoch 1 had KL 0.075 against stock without the term; retraining with it.)
 
 ## 6. Deliverables
 
