@@ -1,0 +1,13 @@
+  ... 250 cases, 0 mismatches (11 s)
+  ... 500 cases, 0 mismatches (19 s)
+  ... 750 cases, 0 mismatches (28 s)
+  ... 1000 cases, 0 mismatches (37 s)
+  ... 1250 cases, 0 mismatches (46 s)
+  ... 1500 cases, 0 mismatches (55 s)
+  ... 1750 cases, 0 mismatches (64 s)
+  ... 2000 cases, 0 mismatches (72 s)
+unary slice: 5652 cases, 0 mismatches
+7652 cases (u256 2000), 0 mismatches (949.1 s), 0 rejected by design, asserted as errors
+  u256        2000 cases     12217 instructions     17794 tokens  (1.46 tok/instr)
+  u256       window: 11898 drawn, 9898 over-80-tokens, 0 over-16B-row, 2000 run
+GATE 1 PASS (ref machine == Python on all cases)

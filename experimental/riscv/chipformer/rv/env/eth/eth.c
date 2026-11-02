@@ -304,21 +304,37 @@ static void handle_u256(const char *arg){
         char op[3];
     } toks[MAX_TOK];
     int ntok=0;
+    // Unary -(E)/+(E) desugars to a WRAPPED (0-(E)): bare "0-E" mis-groups after a binary operator
+    // ("5 - -(3)" computed (5-0)-3). wrap_depth records the depth inside each wrapped group; its own
+    // ')' earns an extra synthetic ')'. Ported from env/sol (solana branch 3f3f9b7).
+    int pdepth=0, wrap_pending=0;
+    int wrap_depth[MAX_TOK]; int wrap_n=0;
+#define PUSHOK(n) do{ if(ntok+(n)>MAX_TOK){ put_str("error (too complex)\n"); return; } }while(0)
     char *p=str;
     int expect_operand=1;
     while(*p){
         while(isspace((unsigned char)*p)) p++;
         if(!*p) break;
         if(expect_operand){
-            if(*p=='('){ toks[ntok].kind=2; toks[ntok].op[0]='('; toks[ntok].op[1]=0; ntok++; p++; expect_operand=1; continue; }
+            if(*p=='('){
+                PUSHOK(1);
+                toks[ntok].kind=2; toks[ntok].op[0]='('; toks[ntok].op[1]=0; ntok++;
+                pdepth++;
+                if(wrap_pending){ wrap_depth[wrap_n++]=pdepth; wrap_pending=0; }
+                p++; expect_operand=1; continue;
+            }
             if(*p=='-' || *p=='+'){
                 char *np=p+1; while(isspace((unsigned char)*np)) np++;
                 if(*np=='('){
+                    PUSHOK(3);
+                    toks[ntok].kind=2; toks[ntok].op[0]='('; toks[ntok].op[1]=0; ntok++;
+                    pdepth++; wrap_pending=1;
                     u256_t z; u256_zero(&z);
                     toks[ntok].kind=0; toks[ntok].num=z; ntok++;
                     toks[ntok].kind=1; toks[ntok].op[0]=*p; toks[ntok].op[1]=0; ntok++; p++; expect_operand=1; continue;
                 }
             }
+            PUSHOK(1);
             char *start=p;
             if(p[0]=='0' && (p[1]=='x'||p[1]=='X')){
                 p+=2;
@@ -338,7 +354,17 @@ static void handle_u256(const char *arg){
             toks[ntok].kind=0; toks[ntok].num=v; ntok++;
             expect_operand=0;
         } else {
-            if(*p==')'){ toks[ntok].kind=2; toks[ntok].op[0]=')'; toks[ntok].op[1]=0; ntok++; p++; expect_operand=0; continue; }
+            if(*p==')'){
+                PUSHOK(2);
+                toks[ntok].kind=2; toks[ntok].op[0]=')'; toks[ntok].op[1]=0; ntok++;
+                pdepth--;
+                if(wrap_n>0 && wrap_depth[wrap_n-1]==pdepth+1){
+                    toks[ntok].kind=2; toks[ntok].op[0]=')'; toks[ntok].op[1]=0; ntok++;
+                    pdepth--; wrap_n--;
+                }
+                p++; expect_operand=0; continue;
+            }
+            PUSHOK(1);
             if(p[0]=='*' && p[1]=='*'){ toks[ntok].kind=1; toks[ntok].op[0]='*'; toks[ntok].op[1]='*'; toks[ntok].op[2]=0; ntok++; p+=2; expect_operand=1; continue; }
             if(p[0]=='<' && p[1]=='<'){ toks[ntok].kind=1; toks[ntok].op[0]='<'; toks[ntok].op[1]='<'; toks[ntok].op[2]=0; ntok++; p+=2; expect_operand=1; continue; }
             if(p[0]=='>' && p[1]=='>'){ toks[ntok].kind=1; toks[ntok].op[0]='>'; toks[ntok].op[1]='>'; toks[ntok].op[2]=0; ntok++; p+=2; expect_operand=1; continue; }
@@ -430,6 +456,7 @@ static void handle_u256(const char *arg){
     if(print_hex){ char hexb[68]; u256_to_hex_trim(&res, hexb); put_str(hexb); put('\n'); }
     else { char dec[80]; u256_to_dec(&res, dec); put_str(dec); put('\n'); }
 #undef MAX_TOK
+#undef PUSHOK
 }
 
 // Strict uint64: decimal or 0x-hex, full match, no sign, no octal.

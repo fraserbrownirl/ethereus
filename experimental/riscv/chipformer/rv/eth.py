@@ -216,19 +216,24 @@ def _u256_tokenize(s: str):
     toks = []
     i = 0
     expect_operand = True
+    depth, wrap_pending, wraps = 0, False, []  # unary -(E) is a wrapped (0-(E)), as handle_u256 does
     while i < len(s):
         if s[i].isspace():
             i += 1
             continue
         if expect_operand:
             if s[i] == "(":
-                toks.append("("); i += 1; expect_operand = True; continue
+                toks.append("("); depth += 1
+                if wrap_pending:
+                    wraps.append(depth); wrap_pending = False
+                i += 1; expect_operand = True; continue
             if s[i] in "+-":
                 j = i + 1
                 while j < len(s) and s[j].isspace():
                     j += 1
                 if j < len(s) and s[j] == "(":
-                    toks.append(("num", 0)); toks.append(s[i]); i += 1; expect_operand = True; continue
+                    toks.append("("); depth += 1; wrap_pending = True
+                    toks.append(("num", "0")); toks.append(s[i]); i += 1; expect_operand = True; continue
             if s[i:i+2].lower() == "0x":
                 j = i + 2
                 while j < len(s) and s[j] in "0123456789abcdefABCDEF":
@@ -244,7 +249,10 @@ def _u256_tokenize(s: str):
             return None
         else:
             if s[i] == ")":
-                toks.append(")"); i += 1; expect_operand = False; continue
+                toks.append(")"); depth -= 1
+                if wraps and wraps[-1] == depth + 1:
+                    toks.append(")"); depth -= 1; wraps.pop()
+                i += 1; expect_operand = False; continue
             if s[i:i+2] in ("**", "<<", ">>"):
                 toks.append(s[i:i+2]); i += 2; expect_operand = True; continue
             if s[i] in "+-*/%&|^":
@@ -1567,6 +1575,57 @@ def boundary_cases():
         yield f"encode f({tp}) 0x{'ab' * (n + 1)}", REJECT
 
 
+def unary_cases():
+    """Unary -(E) and +(E) after every binary operator, nested, and at the u256 boundaries, in decimal and hex.
+
+    Expected values are Python ints with the grouping written out here, not expected(): the oracle's tokenizer
+    is a copy of the firmware's and shared its bare `0-E` desugar, which computed `5 - -(3)` as (5-0)-3."""
+    M = 1 << 256
+
+    def ap(op, a, b):
+        if op in ("/", "%") and b == 0:
+            return None
+        return {"+": lambda: a + b, "-": lambda: a - b, "*": lambda: a * b, "/": lambda: a // b, "%": lambda: a % b,
+                "**": lambda: pow(a, b, M), "&": lambda: a & b, "|": lambda: a | b, "^": lambda: a ^ b,
+                "<<": lambda: a << b if b < 256 else 0, ">>": lambda: a >> b if b < 256 else 0}[op]() % M
+
+    def show(v):
+        return "error (div by zero)\n" if v is None else f"{v}\n"
+
+    ops = ["+", "-", "*", "/", "%", "**", "&", "|", "^", "<<", ">>"]
+    vals = [0, 1, 2, 3, 255, 2**128, 2**255, M - 2, M - 1]
+    forms = [str, hex]
+    for op in ops:
+        for x in vals:
+            for y in vals:
+                for fa, fb in ((str, str), (hex, hex), (str, hex)):
+                    yield f"u256 {fa(x)} {op} -({fb(y)})", show(ap(op, x, -y % M))
+                    yield f"u256 {fa(x)} {op} +({fb(y)})", show(ap(op, x, y))
+    # A following operator: -(E) is an atom, so it groups by the outer operators' precedence alone.
+    prec = _U256_PREC
+    for op in ops:
+        for op2 in ("+", "*", "|"):
+            for x, y, z in ((5, 3, 2), (2**255, 1, M - 1), (M - 1, 2, 3), (7, 0, 1)):
+                ny = -y % M
+                if prec[op] >= prec[op2]:
+                    inner = ap(op, x, ny)
+                    want = None if inner is None else ap(op2, inner, z)
+                else:
+                    inner = ap(op2, ny, z)
+                    want = ap(op, x, inner)
+                for f in forms:
+                    yield f"u256 {f(x)} {op} -({f(y)}) {op2} {f(z)}", show(want)
+    for f in forms:
+        for x, y, z in ((4, 1, 2), (0, M - 1, 1), (2**255, 2**255, 3)):
+            yield f"u256 -(-({f(x)}))", show(x)
+            yield f"u256 -({f(x)})", show(-x % M)
+            yield f"u256 -(-(-({f(x)})))", show(-x % M)
+            yield f"u256 {f(x)} - -({f(y)} - -({f(z)}))", show((x - (-(y - (-z % M)) % M)) % M)
+            yield f"u256 -({f(x)} * -({f(y)}))", show(-(x * (-y % M)) % M)
+            yield f"u256 ({f(x)} - -({f(y)})) * -({f(z)})", show(((x + y) % M) * (-z % M) % M)
+            yield f"u256 {f(x)} ** -(-({f(z)}))", show(pow(x, z, M))
+
+
 # ---------------------------------------------------------------------------
 # Runner
 
@@ -1635,6 +1694,20 @@ def main():
             print(f"MISMATCH {op} {cmd!r} got={val!r} want={oracle!r}")
             if bad <= 3:
                 print(" raw:", repr(raw.decode()[:2000]))
+
+    if "u256" in (only or OPS):
+        nu = bu = 0
+        for cmd, want in unary_cases():
+            nu += 1
+            total_expected += 1
+            val, _, _ = run_one(cmd)
+            if val != want or expected(cmd) != want:
+                bad += 1
+                bu += 1
+                if len(bad_samples) < 10:
+                    bad_samples.append((cmd, repr(val), repr(want)))
+                print(f"MISMATCH unary {cmd!r} got={val!r} oracle={expected(cmd)!r} want={want!r}")
+        print(f"unary slice: {nu} cases, {bu} mismatches")
 
     if "encode" in (only or OPS):
         nb = bb = 0

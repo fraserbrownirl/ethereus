@@ -326,7 +326,12 @@ hex-in/hex-out totals 8,499 at max width — 1.9× cheaper than dec-in/dec-out
 ## Firmware sizes
 
 Tracked `eth-bridge.elf`: sha256
-`8f07bfe35689e789010e0f5424b67d9ae616a3fb0532eb890af4d5a6fb4f099a`. All ETH Evals scores ran on the previous image, `c0853b4`, sha256
+`7c4175e66010f2b116bbbd4b45e1a5baba537de8692079ef5f046c115af14462`; `eth.elf`: sha256
+`7dcd89331befc2b75af75e818ddcf1e8691a109246cfe20c98e078e293007e90` (2026-11-02, unary minus fix:
+`-(E)` after a binary operator is a wrapped `(0-(E))`; ported from env/sol, solana branch `3f3f9b7`).
+Previous `eth-bridge.elf` `8f07bfe35689e789010e0f5424b67d9ae616a3fb0532eb890af4d5a6fb4f099a`,
+`eth.elf` `4d3c8cc51e0a5a34ab00e67ce2b23334e0c3edc1ae38fec559f608dce96f39a3`: computed `5 - -(3)` as
+(5-0)-3 = 2. The fine-tune checkpoints and their evaluations carry 8f07bfe3. All ETH Evals scores ran on the previous image, `c0853b4`, sha256
 `b320d31b4fd722ac0adfdbcf1313892967ea1bf8e826bd318138cb167c06c685`, with `.filebuf`
 at 0x900 and `file_buf` in the symbol table. Source is `880e37d`. The whole-file hash
 changes per build because of debug paths, so compare loaded sections: a rebuild from

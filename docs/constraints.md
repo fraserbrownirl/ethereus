@@ -9,6 +9,7 @@ Rules for future work. Each line is the rule an accepted fix implies; the bracke
 - Every rebuilt binary matches its committed bytes in every loaded section, checked by `scripts/provenance.py` locally and in CI. (provenance task)
 - A tool's default that names an artefact resolves at call time, never at import. (`path=ELF` bound at definition: a false gate 1 pass)
 - Gate scripts exit nonzero on failure; a gate is read by its verdict line and its exit code together. (`eth.py` exited 0 on GATE 1 FAIL; textcheck too)
+- A gate's expected value comes from an evaluator independent of the firmware's parser; an oracle that copies the firmware's tokenizer inherits its bugs. Unary `-(E)` is a wrapped `(0-(E))`, asserted after every binary operator, nested, and at the u256 boundaries in decimal and hex. (eth's bare `0-E` desugar computed `5 - -(3)` as 2; the Python oracle mirrored it and gate 1 passed; the Solana lane found it)
 
 ## Oracles, gates and tests
 
