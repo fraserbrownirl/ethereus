@@ -45,6 +45,7 @@ Rules for future work. Each line is the rule an accepted fix implies; the bracke
 - A run kills nothing it didn't start and uses a time limit that fits the work. (chat "hang" killed at 90 s)
 - A test's length cap exceeds the longest legitimate answer it can produce. (smoke at 400 tokens cut file reads off)
 - A run's time limit covers its worst case, every item at its cap, and it writes results as it goes so a timeout keeps what ran. (ft1 smoke hit its 2-hour limit at 15 of 20 and wrote nothing)
+- An evaluation is sized to the time and credit available before it starts: a fixed sample per family, the same sample for every model compared. (ft1's full evaluation: about 2 minutes a row, 246 rows)
 - Task lists that feed one arm are deduplicated by task name before launch. (Internet+Skills lists overlapped once the RPC was set)
 - A server-side system line joins the client's system message; the template allows one. (TemplateError on every OpenCode trial)
 - A first trial of any new arm is read before the batch is left alone. (two Internet+Skills false starts)
