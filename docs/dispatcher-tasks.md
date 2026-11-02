@@ -16,7 +16,7 @@ Single list for the core repo and Route A; the Cursor agent and Muse are retired
 | `eth_in` firmware change, its gate 4, the spec's spill test | done | | 2026-11-01 | 2026-11-02 | ELF 8f07bfe3: gate 4 6 of 6, both spec cases spilled and exact |
 | Ethereus test, after the spill fix | done | | 2026-11-02 | 2026-11-02 | final exact, of 15: circuit 3, base 4, ceiling 5; tool right: circuit 2 |
 | Regenerate `run` and calldata fine-tune families with real addresses | done | On branch `spill-eth-in`; regenerate if the firmware changes again | 2026-11-01 | 2026-11-01 | 763 spilled rows, all match an independent check; 56 create2 rows |
-| GPU test of `serve.py` store support | queued | Needs the GPU after the eval batches | | | |
+| GPU test of `serve.py` store support | running | | 2026-11-02 | | |
 | +Skills arm on `q9-store-rv` | queued | Needs the GPU after the eval batches | | | |
 | 4B evals on a rented L4, up to $0.50/h | queued | After the 9B evals | | | |
 | `docs/ethevals-submission.md` final draft | queued | Needs both backbones' numbers | | | |

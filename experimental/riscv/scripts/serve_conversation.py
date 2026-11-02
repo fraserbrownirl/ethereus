@@ -28,10 +28,12 @@ def main() -> int:
     ap.add_argument("--model", required=True)
     ap.add_argument("--firmware", required=True)
     ap.add_argument("--max-tokens", type=int, default=1500)
+    ap.add_argument("--snapshot", default=None, help="a store checkpoint's files: also tests get, on a fact in es/blocks.md")
+    ap.add_argument("--system-line", default=None)
     ap.add_argument("--spill", action="store_true", help="also the spec's spill test: it must report spilled")
     args = ap.parse_args()
-    engine = serve.Engine(args.model, args.firmware)
-    app = serve.create_app(engine, ["k"], tempfile.mkdtemp(), args.firmware, sync_seconds=3600)
+    engine = serve.Engine(args.model, args.firmware, snapshot=args.snapshot, system_line=args.system_line)
+    app = serve.create_app(engine, ["k"], tempfile.mkdtemp(), args.firmware, snapshot=args.snapshot, sync_seconds=3600)
     c = TestClient(app)
     head = {"Authorization": "Bearer k"}
     bad, history = 0, []
@@ -47,7 +49,10 @@ def main() -> int:
             return None
         j = r.json()
         msg, tools = j["choices"][0]["message"], j["ethereus"]["tool_messages"]
-        calls = [json.loads(x["function"]["arguments"])["cmd"] for x in msg.get("tool_calls", [])]
+        calls = []
+        for x in [*msg.get("tool_calls", []), *j["ethereus"].get("tool_calls", [])]:
+            arg = json.loads(x["function"]["arguments"])
+            calls.append(arg.get("cmd") or f"{x['function']['name']} {arg.get('name', '')}")
         replays = engine.replay(c.get(f"/v1/traces/{j['ethereus']['trace_id']}", headers=head).json())
         ok = (any(want_cmd in x for x in calls) and all(p["ok"] for p in replays)
               and (want is None or any(want in t["content"] for t in tools)))
@@ -62,6 +67,8 @@ def main() -> int:
 
     for ask, cmd, want in ASKS:
         turn(ask, cmd, want, history)
+    if args.snapshot:  # the store through the worker: an exact file read, and the circuit's eth beside it
+        turn("Use the get tool with exactly this name: es/blocks.md", "get es/blocks.md", "Verify DeFi Integrations", [])
     if args.spill:
         j = turn(SPILL, "decode", None, [])
         if j is not None and not j["ethereus"]["spilled"]:  # the spec's test is spilled: true
