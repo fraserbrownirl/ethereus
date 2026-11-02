@@ -538,11 +538,12 @@ summary{{cursor:pointer;color:#9bd}}.ok{{color:#6c6}}.bad{{color:#d77}}.warn{{co
             import glob
             import shutil
 
-            cli = shutil.which("vercel") or next(iter(sorted(glob.glob(str(Path.home() / ".local/share/fnm/node-versions/*/installation/bin/vercel")))), None)
+            cli = shutil.which("vercel") or next(iter(sorted(glob.glob(str(Path.home() / ".fnm/node-versions/*/installation/bin/vercel")))), None)
             if cli is None:
                 print("vercel CLI not found; console not redeployed")
-            else:
-                subprocess.Popen([cli, "deploy", "--prod", "--yes"], cwd=site, stdout=subprocess.DEVNULL,
+            else:  # its shebang needs the node beside it on PATH
+                env = {**os.environ, "PATH": f"{Path(cli).parent}:{os.environ.get('PATH', '')}"}
+                subprocess.Popen([cli, "deploy", "--prod", "--yes"], cwd=site, env=env, stdout=subprocess.DEVNULL,
                                  stderr=subprocess.DEVNULL, start_new_session=True)
 
 
