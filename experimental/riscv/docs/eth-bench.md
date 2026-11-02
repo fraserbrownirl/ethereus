@@ -211,7 +211,11 @@ words — Qwen can repeat a tiny `files get` answer into the next call,
 but anything bigger must go through the bridge/gateway spill. The
 model never sees full file bytes in-window except through the spill.
 
-## API spec spill test: not met — deferred (2026-11-01)
+## API spec spill test: met (2026-11-02)
+
+On bridge ELF `8f07bfe3`, `q9-rv2`, through the worker, on the eval VM, `/workspace/spill-strict2.log`. Both spec cases give `spilled: true` with 0 wrong on replay and the exact answer, using an explicit command: `decode` with 10 words returns 1, 8, 15 ... 64, and `run erc20` balanceOf(alice) with real calldata returns `0x...03e8`. The firmware reads the rewritten command from `eth_in` and does not read the capture on a spilled run, so the circuit and the reference run alike. The first run on `61355554` failed the lockstep at position 8 because the bridge read the capture first (`gate4-spill-1/spill-test.log`). Left to its own syntax, the model still writes `decode (uint256,...)`, which the firmware rejects; the fine-tune addresses that.
+
+### Earlier record: not met, deferred (2026-11-01)
 
 The spec's test (`eth decode` with 10 words and `eth run erc20` with real calldata, both `spilled: true`, through the worker) is not met. GPU spill is off (`serve.SPILL_ON_GPU`): the first run returned a lock error right after `GO`, because `core.snapshot` resets the circuit's capture state, so a re-prefilled call is not captured. Over-window calls get the firmware's exact `error (too long)`. The reference-machine path passes (`tests/test_rv_filebuf.py`, `tests/test_rv_spill.py`).
 
@@ -321,7 +325,8 @@ hex-in/hex-out totals 8,499 at max width — 1.9× cheaper than dec-in/dec-out
 
 ## Firmware sizes
 
-Tracked `eth-bridge.elf` (`c0853b4`): sha256
+Tracked `eth-bridge.elf`: sha256
+`8f07bfe35689e789010e0f5424b67d9ae616a3fb0532eb890af4d5a6fb4f099a`. All ETH Evals scores ran on the previous image, `c0853b4`, sha256
 `b320d31b4fd722ac0adfdbcf1313892967ea1bf8e826bd318138cb167c06c685`, with `.filebuf`
 at 0x900 and `file_buf` in the symbol table. Source is `880e37d`. The whole-file hash
 changes per build because of debug paths, so compare loaded sections: a rebuild from
@@ -339,6 +344,6 @@ for byte. The sizes below predate this image: it has `.text 111,652 / .rodata 23
 
 One flipped bit in a keccak round constant, built from a scratch copy, must fail gate 1 while the unflipped build passes. `scripts/oracle_independence.sh` does this; log `docs/logs/oracle-independence.log`. Over 40 cases per command the flipped build fails keccak 40, create 37 and selector 15. The cases it does not fail do not exercise the hash: 25 selectors come from the precomputed table, and 3 creates are bad-nonce errors. The table is therefore checked only by this gate's comparison with the Python oracle.
 
-`tests/test_rv_errors.py` sends malformed input to every command, log `docs/logs/malformed-input.log`. No input crashes, hangs or prints non-text. Six forms answer instead of giving an error, and the oracle agrees with each: bare `keccak`, a `u256` literal above 2**256 which wraps silently, `selector` without a full signature (three forms), and a short `bytes32` in `encode`. They are strict expected failures until the next firmware change; the ELF stays frozen through the evals.
+`tests/test_rv_errors.py` sends malformed input to every command, log `docs/logs/malformed-input.log`. No input crashes, hangs or prints non-text. Six forms answer instead of giving an error, and the oracle agrees with each: bare `keccak`, a `u256` literal above 2**256 which wraps silently, `selector` without a full signature (three forms), and a short `bytes32` in `encode`. The ELF now rejects them, asserted as errors and not compared (rule 5), with a 576-case boundary slice in gate 1.
 
 `chipformer/rv/eth.py` now exits 1 on a mismatch and takes `--elf`. Before this it exited 0 on `GATE 1 FAIL`, so read the printed verdict on any earlier log.
