@@ -213,9 +213,9 @@ def results(data):
 
 
 STEP3 = [("step3-v01-skills", "Ethereus-9B-v0.1", "Internet + Skills"), ("step3-v01-internet", "Ethereus-9B-v0.1", "Internet"),
-         ("step3-untrained", "Ethereus-9B (untrained)", "Internet"), ("step3-stock", "Qwen3.5-9B", "Internet"),
-         ("step3-vanilla-v01", "Ethereus-9B-v0.1", "Model only"), ("step3-vanilla-untrained", "Ethereus-9B (untrained)", "Model only"),
-         ("step3-vanilla-stock", "Qwen3.5-9B", "Model only")]
+         ("step3-untrained-internet", "Ethereus-9B (untrained)", "Internet"), ("step3-stock-internet", "Qwen3.5-9B", "Internet"),
+         ("step3-v01-modelonly", "Ethereus-9B-v0.1", "Model only"), ("step3-untrained-modelonly", "Ethereus-9B (untrained)", "Model only"),
+         ("step3-stock-modelonly", "Qwen3.5-9B", "Model only")]
 
 
 def now_panel(data, now):
