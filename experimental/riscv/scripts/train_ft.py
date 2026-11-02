@@ -145,6 +145,17 @@ def run_training(text_model, head, tr, ho, a, dev, pad, log) -> dict[str, Lora]:
     rng = random.Random(a.seed)
     n = math.ceil(len(tr) / a.batch) * a.epochs
     step, t0 = 0, time.time()
+
+    def heldout():
+        text_model.eval()
+        with torch.no_grad():
+            tot = lab = 0.0
+            for g in groups(ho, a.batch, random.Random(0)):
+                tot += loss_sum(text_model, head, ho, g, a.micro_tokens, pad, dev, backward=None)
+                lab += labelled(ho, g)
+        return tot / max(lab, 1)
+
+    log({"before_training_heldout_loss": heldout()})
     for epoch in range(a.epochs):
         text_model.train()
         for g in groups(tr, a.batch, rng):
@@ -158,14 +169,12 @@ def run_training(text_model, head, tr, ho, a, dev, pad, log) -> dict[str, Lora]:
             opt.zero_grad(set_to_none=True)
             step += 1
             if step % a.log_every == 0 or step == n:
-                log({"step": step, "of": n, "epoch": epoch, "loss": s / d, "lr": lr, "minutes": (time.time() - t0) / 60})
-        text_model.eval()
-        with torch.no_grad():
-            tot = lab = 0.0
-            for g in groups(ho, a.batch, random.Random(0)):
-                tot += loss_sum(text_model, head, ho, g, a.micro_tokens, pad, dev, backward=None)
-                lab += labelled(ho, g)
-        log({"epoch_done": epoch, "heldout_loss": tot / max(lab, 1)})
+                mem = torch.cuda.max_memory_allocated() / 2**30 if torch.cuda.is_available() else 0
+                log({"step": step, "of": n, "epoch": epoch, "loss": s / d, "lr": lr, "minutes": (time.time() - t0) / 60, "peak_gib": round(mem, 1)})
+            if step % a.save_every == 0:
+                Path(a.out).mkdir(parents=True, exist_ok=True)
+                save_lora(loras, Path(a.out) / "lora-latest.safetensors")
+        log({"epoch_done": epoch, "heldout_loss": heldout()})
         Path(a.out).mkdir(parents=True, exist_ok=True)
         save_lora(loras, Path(a.out) / f"lora-epoch{epoch + 1}.safetensors")
     save_lora(loras, Path(a.out) / "lora.safetensors")
@@ -282,6 +291,7 @@ def main() -> int:
     t.add_argument("--seed", type=int, default=0)
     t.add_argument("--log-every", type=int, default=5)
     t.add_argument("--limit-rows", type=int, default=0)
+    t.add_argument("--save-every", type=int, default=50)
     p = sub.add_parser("apply")
     p.add_argument("--merged", required=True)
     p.add_argument("--lora", required=True)

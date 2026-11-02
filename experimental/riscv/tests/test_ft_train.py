@@ -109,10 +109,11 @@ def test_training_on_a_tiny_real_qwen_lowers_loss_and_never_moves_the_base(tmp_p
     seq = list(range(5, 25))
     ex = [(seq, [-100] * 10 + seq[10:])] * 4
     logged = []
-    a = Namespace(lr=3e-3, batch=2, epochs=8, micro_tokens=1000, seed=0, log_every=1, out=str(tmp_path / "o"))
+    a = Namespace(lr=3e-3, batch=2, epochs=8, micro_tokens=1000, seed=0, log_every=1, save_every=2, out=str(tmp_path / "o"))
     loras = F.run_training(m.model, m.lm_head, ex, ex, a, "cpu", 0, logged.append)
     h = [x["heldout_loss"] for x in logged if "heldout_loss" in x]
-    assert h[-1] < h[0]
+    assert h[-1] < h[0] and logged[0]["before_training_heldout_loss"] > h[-1]
+    assert (tmp_path / "o/lora-latest.safetensors").exists()
     assert (tmp_path / "o/lora.safetensors").exists() and loras
     for name, lo in loras.items():
         assert torch.equal(lo.base.weight, before[f"model.{name}.weight"])
