@@ -1626,6 +1626,26 @@ def unary_cases():
             yield f"u256 {f(x)} ** -(-({f(z)}))", show(pow(x, z, M))
 
 
+def wrap_cases():
+    """decode of bytes and string with offsets and lengths near 2^32, where 32-bit `pos + l` wraps (the Solana lane's
+    finding). Out of range must be an error, asserted and not compared. The in-range neighbours are compared with
+    eth_abi directly, not with expected(). Data: head slot (offset), length slot, one 32-byte payload slot."""
+    from eth_abi import decode as abi_decode
+
+    def slot(n):
+        return f"{n:064x}"
+    payload = "41" * 32
+    for ty in ("bytes", "string"):
+        for off in (0xffffffff, 0xfffffffe, 0xffffffe1, 0xffffffe0, 0xffffffdf, 0xfffffff0, 2**32 - 64, 0xffffffc0, 97, 65, 96):
+            yield f"decode {ty} 0x{slot(off)}{slot(3)}{payload}", REJECT
+        for blen in (0xffffffff, 0xfffffffe, 0xffffffe0, 0xffffffdf, 2**32 - 33, 2**32 - 64, 33, 64):
+            yield f"decode {ty} 0x{slot(32)}{slot(blen)}{payload}", REJECT
+        for blen in (0, 3, 31, 32):
+            data = bytes.fromhex(slot(32) + slot(blen) + "41" * blen + "00" * (32 - blen))
+            val = abi_decode([ty], data)[0]
+            yield f"decode {ty} 0x{data.hex()}", ("0x" + val.hex() if ty == "bytes" else val) + "\n"
+
+
 # ---------------------------------------------------------------------------
 # Runner
 
@@ -1708,6 +1728,20 @@ def main():
                     bad_samples.append((cmd, repr(val), repr(want)))
                 print(f"MISMATCH unary {cmd!r} got={val!r} oracle={expected(cmd)!r} want={want!r}")
         print(f"unary slice: {nu} cases, {bu} mismatches")
+
+    if "decode" in (only or OPS):
+        nw = bw = 0
+        for cmd, want in wrap_cases():
+            nw += 1
+            total_expected += 1
+            val, _, _ = run_one(cmd)
+            if not agrees(val, want):
+                bad += 1
+                bw += 1
+                if len(bad_samples) < 10:
+                    bad_samples.append((cmd, repr(val), repr(want)))
+                print(f"MISMATCH wrap {cmd[:60]!r} got={val!r} want={want!r}")
+        print(f"wraparound slice: {nw} cases, {bw} mismatches")
 
     if "encode" in (only or OPS):
         nb = bb = 0

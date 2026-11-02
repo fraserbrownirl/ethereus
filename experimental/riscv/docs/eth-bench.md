@@ -325,6 +325,8 @@ hex-in/hex-out totals 8,499 at max width — 1.9× cheaper than dec-in/dec-out
 
 ## Firmware sizes
 
+On branch `abi-wrap-fix` (not yet on main, 2026-11-02): `eth-bridge.elf` `6d41d92b4aef53ba1a0979938a98698ea12386d6965440dd466f68a9475eaed1`, `eth.elf` `e4616ca863f9f798b6a4200e0d08c4e1c5598a81ff2c0ce60d20234666c79879`: `decode` of bytes and string checks dynamic offsets and lengths in subtraction form; `off + 32` wrapped for offsets near 2^32 and read before the buffer.
+
 Tracked `eth-bridge.elf`: sha256
 `7c4175e66010f2b116bbbd4b45e1a5baba537de8692079ef5f046c115af14462`; `eth.elf`: sha256
 `7dcd89331befc2b75af75e818ddcf1e8691a109246cfe20c98e078e293007e90` (2026-11-02, unary minus fix:

@@ -13,6 +13,8 @@ Rules for future work. Each line is the rule an accepted fix implies; the bracke
 
 - A firmware helper that writes its output before it finishes reading its inputs (u256 sub, sub_borrow, shl, shr, sar, divmod) is never called with an output that is also an input; `tests/test_rv_eth_alias.py` checks every call. (the Solana lane's u128_sub_borrow, narrowed from eth's u256_sub_borrow, read `a` after writing `r` when `r == a`; eth has the same helpers but no aliased call)
 
+- A bounds check on a length or offset read from input is written in subtraction form (`l > inlen - pos`, after `pos <= inlen`), never `pos + l > inlen`: on RV32 the sum wraps. Gate 1 asserts errors for offsets and lengths near 2^32. (eth `decode` returned empty bytes and strings for offsets 0xffffffe0..0xffffffff, reading before its buffer; the Solana lane found the pattern)
+
 ## Oracles, gates and tests
 
 - The oracle is the external library; the firmware moves to match it, never the reverse. (quirk-mirroring harness)
