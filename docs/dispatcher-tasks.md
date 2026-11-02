@@ -4,8 +4,9 @@ Single list for the core repo and Route A; the Cursor agent and Muse are retired
 
 | Task | State | Blocker | Crossing artefact | Started | Finished | Result |
 |---|---|---|---|---|---|---|
-| K3 merge: compiled layers into Kimi K3 (mixture-of-experts, gated delta), its gates | queued | Priority after ft1b's gates (Fraser, 2026-11-02); first step a feasibility note: weights, size, layer layout, where compiled layers fit in an MoE | firmware ELF 8f07bfe3 and the circuit; nothing from the 9B checkpoints | | | |
-| Task generator for step 3: Solidity build tasks scored by machines, three kinds, Harbor format, 50 proven per kind (Fraser) | running | Kind 1: 30 proven (OpenZeppelin 15, dragonfly 15); Solady and PRB regenerating after three verifier and lint causes, then proof; Kinds 2 and 3 next | none; uses OpenZeppelin v5.7.0 and real findings | 2026-11-02 | | |
+| Unary minus fix in eth firmware (Fraser, priority): port, gate slice, rebuild, gate 1, exposure list | running | Gate 1 PASS on the Mac; gate 4, canary, snapshot verify on the GPU | ELF 7c4175e6 (bridge), 7dcd8933 | 2026-11-02 | | gate 1 u256 7,652 cases, 0 mismatches; nothing to regenerate |
+| K3 merge: compiled layers into Kimi K3 (mixture-of-experts, gated delta), its gates | running | Feasibility note: config read from Hugging Face (2.78T, 93 layers, 69 KDA + 24 MLA, 896 experts, routed experts MXFP4); its crossing artefact (firmware, circuit) exists, so it runs now | firmware ELF 8f07bfe3 and the circuit; nothing from the 9B checkpoints | | | |
+| Task generator for step 3: Solidity build tasks scored by machines, three kinds, Harbor format, 50 proven per kind (Fraser) | running | Kind 1: 30 proven (OpenZeppelin 15, dragonfly 15); Solady 15 and PRB 5 in proof (`kind1v6`); Kinds 2 and 3 next | none; uses OpenZeppelin v5.7.0 and real findings | 2026-11-02 | | |
 | API and open call | blocked | Wait for K3: the flywheel pays off only on a model builders prefer (Fraser) | the K3 checkpoint | | | |
 | Fork batch: 7 mainnet-fork tasks, Internet, both arms | done | | none; needs the GPU only | 2026-11-01 17:30 | 2026-11-02 01:30 | 0 of 7 in both arms; totals 6 of 37 in both |
 | Judged batch: 6 judged tasks plus witness-string rerun, Internet, both arms | done | | none | 2026-11-01 13:28 | 2026-11-01 17:30 | 0 of 7 in both arms; totals 6 of 30 in both |
@@ -24,7 +25,7 @@ Single list for the core repo and Route A; the Cursor agent and Muse are retired
 | 4B evals on a rented L4, up to $0.50/h | blocked | Credit: $20.55 covers about 13 hours of the eval VM, which the fine-tune needs; start after a top-up | none; needs its own merged 4B checkpoint | | | |
 | `docs/ethevals-submission.md` final draft | queued | Needs both backbones' numbers | each arm's results folder | | | |
 | Fine-tune data generator, `scripts/gen_ft_data.py` | done | | ELF hash, snapshot pack | 2026-11-01 | 2026-11-02 | sample approved by Fraser; 60 `run_limit` rows added after |
-| Fine-tune training and evaluation, `docs/finetune-spec-v1.md` | running | ft1b passed KL and MMLU; smoke with files 11 of 20 (target 12); spurious calls 0 of 50; files and knowledge rerun at 8,000 tokens after a scorer fix; Ethereus test running | data/ft1 jsonl, base 9B, then q9-store-rv for apply | 2026-11-02 | | |
+| Fine-tune training and evaluation, `docs/finetune-spec-v1.md` | running | ft1b: KL 0.0078, MMLU 78.6 (stock 78.0), knowledge with files 11 of 20 (target 12), 48 tool questions 45 right calls, finals 45, unneeded calls 0 of 50, Ethereus test 13 of 15 | data/ft1 jsonl, base 9B, then q9-store-rv for apply | 2026-11-02 | | |
 | Status console, `scripts/status_page.py` | done | | docs/status.html | 2026-11-01 | 2026-11-01 | |
 | Clean `.env`, `push_secrets.py` | done | | none | 2026-11-01 | 2026-11-01 | `eba5d52` |
 | No-key Internet run, circuit arm | done | | q9-rv2 | 2026-11-01 | 2026-11-01 | 6/24 tasks, 12/48 trials |
