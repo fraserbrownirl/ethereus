@@ -1,6 +1,6 @@
 {
   "snapshot": "ethskills.fs.npz",
-  "sha256": "aad051b2f41f661eeb295e0de6607e346e5727febd99934c5e2cf7482502f98f",
+  "sha256": "c2f24eca4a2d4ce2f5eeeddfbde628a5b8e05ac8ca7596dbbbd03ec0bd6d5ef7",
   "files": [
     "es/index.md",
     "es/why.md",
@@ -19,7 +19,7 @@
     "es/oracles.md",
     "es/vaults.md"
   ],
-  "token_count": 39539,
+  "token_count": 39880,
   "firmware": "eth-bridge.elf",
   "firmware_sha256": "61355554d4b9fd71988f0d2d7c97736c4158f7c6e578ceae149daf395dcb9aae",
   "store_cfg": {

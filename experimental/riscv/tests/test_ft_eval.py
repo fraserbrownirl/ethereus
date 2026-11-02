@@ -42,10 +42,11 @@ def test_a_spilled_call_scores_on_the_full_command():
 
 
 def test_knowledge_final_needs_the_answer_after_the_response():
-    row = {"id": "k", "family": "files", "answer": "Check staleness"}
-    text = "<tool_call>\n<function=files>\n<parameter=op>\nget\n</parameter>\n</function>\n</tool_call>\n<tool_response>\nCheck staleness\n</tool_response>\n"
+    row = {"id": "k", "family": "files", "answer": "Check at 5%", "source": "es/a.md", "final": "Per `es/a.md`, check `x` at 5."}
+    text = "<tool_call>\n<function=files>\n<parameter=op>\nget\n</parameter>\n</function>\n</tool_call>\n<tool_response>\nCheck `x` at 5, es/a.md\n</tool_response>\n"
     assert not E.score_tool_row(row, text + "No idea.", ("files", {"op": "get"}))["final_ok"]
-    assert E.score_tool_row(row, text + "**Check staleness** on reads.", ("files", {"op": "get"}))["final_ok"]
+    assert not E.score_tool_row(row, text + "`es/a.md` says check it at 6.", ("files", {"op": "get"}))["final_ok"]
+    assert E.score_tool_row(row, text + "The file `es/a.md` tells you to check `x` at 5.", ("files", {"op": "get"}))["final_ok"]
 
 
 def test_summary_thresholds():

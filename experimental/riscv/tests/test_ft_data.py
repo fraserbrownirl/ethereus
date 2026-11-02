@@ -80,7 +80,34 @@ def test_negatives_call_nothing(data):
 def test_knowledge_answers_appear_in_the_tool_response(data):
     for r in data[0]:
         if r["family"] in ("files", "knowledge"):
-            assert r["answer"] in r["messages"][-2]["content"].replace("**", "")
+            assert r["answer"] in r["messages"][-2]["content"].replace("**", "").replace("\n", " ")
+
+
+def test_knowledge_final_is_a_checked_restatement_not_the_raw_text(data):
+    sys.path.insert(0, str(RV / "scripts"))
+    sys.path.insert(0, str(RV))
+    import gen_ft_data as g
+
+    rows = [r for r in data[0] if r["family"] in ("files", "knowledge")]
+    assert rows
+    for r in rows:
+        assert r["messages"][-1]["content"] == r["final"] != r["answer"]
+        assert not g.restatement_problems(r["final"], r["answer"], r["source"]), r["id"]
+        assert r["answer"] in r["messages"][-2]["content"].replace("**", "").replace("\n", " ")  # the tool response stays raw
+
+
+def test_restatement_checker():
+    sys.path.insert(0, str(RV / "scripts"))
+    sys.path.insert(0, str(RV))
+    import gen_ft_data as g
+
+    fact, f = "`maxMint` must not use balanceOf; stETH fell to 0.93 ETH in 2022. Look for: x. [SP O-12]", "es/a.md"
+    assert not g.restatement_problems("According to `es/a.md`, `maxMint` must not use it, and stETH fell to 0.93 ETH in 2022.", fact, f)
+    assert g.restatement_problems("`maxMint` must not use it.", fact, f) == ["does not name the file"]
+    assert g.restatement_problems("Per `es/a.md`, stETH fell to 0.90 ETH.", fact, f)
+    assert g.restatement_problems("Per `es/a.md`, use `minMint`.", fact, f)
+    assert g.restatement_problems("Per `es/a.md`, it fell. Look for: x.", fact, f)
+    assert g.restatement_problems("Per `es/a.md`, a. b. c.", fact, f) == ["over two sentences"]
 
 
 def test_smoke_questions_are_held_out(data):

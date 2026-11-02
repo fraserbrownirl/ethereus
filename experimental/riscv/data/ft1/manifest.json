@@ -79,32 +79,32 @@
   },
   "files": {
    "wanted": 600,
-   "written": 361,
+   "written": 362,
    "heldout": 36,
    "rejected": {
-    "pool_exhausted": 24839
+    "pool_exhausted": 24838
    },
-   "max_tokens": 11898,
+   "max_tokens": 11892,
    "variants": {
-    "opencode_tools": 76,
-    "plain": 280,
-    "opencode_system": 5
+    "opencode_tools": 69,
+    "plain": 287,
+    "opencode_system": 6
    },
    "sources": {
-    "es/oracles.md": 30,
-    "es/amm.md": 35,
-    "es/lending.md": 57,
-    "es/index.md": 58,
-    "es/vaults.md": 36,
-    "es/general.md": 69,
-    "es/amaster.md": 19,
-    "es/why.md": 10,
-    "es/blocks.md": 3,
-    "es/l2s.md": 18,
-    "es/standards.md": 8,
-    "es/wallets.md": 7,
-    "es/protocol.md": 9,
-    "es/gas.md": 2
+    "es/l2s.md": 21,
+    "es/gas.md": 4,
+    "es/oracles.md": 31,
+    "es/index.md": 53,
+    "es/vaults.md": 31,
+    "es/lending.md": 56,
+    "es/amaster.md": 17,
+    "es/amm.md": 39,
+    "es/general.md": 77,
+    "es/wallets.md": 8,
+    "es/why.md": 11,
+    "es/blocks.md": 2,
+    "es/protocol.md": 8,
+    "es/standards.md": 4
    }
   },
   "negative": {
@@ -133,26 +133,27 @@
    "rejected": {
     "pool_exhausted": 20699
    },
-   "max_tokens": 11902,
+   "max_tokens": 11904,
    "variants": {
-    "plain": 238,
-    "opencode_tools": 61,
-    "opencode_system": 2
+    "plain": 230,
+    "opencode_tools": 68,
+    "opencode_system": 3
    },
    "sources": {
-    "es/protocol.md": 3,
-    "es/lending.md": 45,
-    "es/why.md": 5,
-    "es/l2s.md": 18,
-    "es/oracles.md": 18,
-    "es/amm.md": 54,
-    "es/index.md": 45,
-    "es/general.md": 58,
-    "es/vaults.md": 21,
-    "es/amaster.md": 15,
-    "es/wallets.md": 9,
-    "es/gas.md": 4,
-    "es/standards.md": 6
+    "es/vaults.md": 26,
+    "es/why.md": 4,
+    "es/index.md": 50,
+    "es/l2s.md": 15,
+    "es/oracles.md": 17,
+    "es/lending.md": 46,
+    "es/amm.md": 50,
+    "es/amaster.md": 17,
+    "es/wallets.md": 8,
+    "es/standards.md": 10,
+    "es/general.md": 50,
+    "es/gas.md": 3,
+    "es/blocks.md": 1,
+    "es/protocol.md": 4
    }
   }
  },
@@ -189,8 +190,9 @@
   "knowledge-00117"
  ],
  "knowledge_set": {
-  "examples": 662,
-  "distinct_answers": 468,
+  "examples": 663,
+  "distinct_answers": 467,
+  "distinct_source_lines": 429,
   "max_file_share": 0.192,
   "per_file": {
    "es/general.md": 127,
@@ -205,7 +207,7 @@
    "es/why.md": 15,
    "es/standards.md": 14,
    "es/protocol.md": 12,
-   "es/gas.md": 6,
+   "es/gas.md": 7,
    "es/blocks.md": 3
   }
  }

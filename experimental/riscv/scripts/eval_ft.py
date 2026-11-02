@@ -4,7 +4,8 @@
     eval_ft.py --model dist-store/q9-store-rv-ft1 --firmware tests/data/rv/eth-bridge.elf --fs build/ethskills.fs.npz --out DIR
 
 Passes: correct tool and arguments on at least 90% of held-out tool rows, final answer holding the tool's result
-byte-exact on at least 95%, and no tool call on any of the 50 non-Ethereum prompts. Run it on the base checkpoint
+byte-exact on at least 95% (a knowledge answer is a restatement: it must name the file and keep the numbers and
+identifiers), and no tool call on any of the 50 non-Ethereum prompts. Run it on the base checkpoint
 too, so the difference is one glance. Exit 0 only on all three.
 """
 
@@ -38,6 +39,13 @@ def expected_call(row, decode=None) -> tuple[str, dict]:
     return fn["name"], fn["arguments"]
 
 
+def key_terms_kept(row, final: str) -> bool:
+    """Finals are restatements, so wording is free: it must name the file and keep the target's numbers and identifiers."""
+    want = row["final"]
+    terms = [t for t in re.findall(r"`([^`]+)`", want) if t != row["source"]] + re.findall(r"\d[\d,.]*\d|\d", want.replace(row["source"], ""))
+    return row["source"] in final and all(t in final for t in terms)
+
+
 def score_tool_row(row, text: str, want: tuple[str, dict], full_cmd=None) -> dict:
     """text: what the model and circuit wrote. full_cmd: the command before any spill rewrite, from the trace."""
     got = calls_in(text)
@@ -51,7 +59,7 @@ def score_tool_row(row, text: str, want: tuple[str, dict], full_cmd=None) -> dic
     head = out[0] if out else ""
     final_ok = bool(got) and bool(head) and head in after_last_response(text) and head in text.split("</tool_call>", 1)[-1]
     if row["family"] in ("files", "knowledge"):
-        final_ok = bool(got) and row["answer"] in after_last_response(text).replace("**", "")
+        final_ok = bool(got) and key_terms_kept(row, after_last_response(text))
     return {"id": row["id"], "family": row["family"], "call_ok": call_ok, "final_ok": final_ok}
 
 
