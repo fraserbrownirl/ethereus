@@ -163,11 +163,10 @@ def main() -> int:
                     found = [f for f in functions(orig[tgt]) if f["name"] == names["function"]]
                     if not found:
                         continue
-                    if base is None:
-                        base = validate.run(validate.layout(Path(a.work) / spec["key"], orig))
+                    base = validate.run(validate.layout(Path(a.work) / spec["key"], orig))  # renames differ per function
                     if not base["compiled"] or not all(c["passed"] for c in base["checks"].values()):
                         manifest["rejected"][seed] = f"renamed original does not pass: {base['reason']}"
-                        break
+                        continue
                     for cls, what, text in mutants(orig[tgt], found[0]):
                         mutant = {**orig, tgt: text}
                         r1 = validate.run(validate.layout(Path(a.work) / spec["key"], mutant))
