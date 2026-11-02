@@ -41,7 +41,7 @@ SEED = 20261101
 MAX_LEN = 8192  # the spec says 4096, but real OpenCode prompts alone are about 7,400 tokens
 MAX_LEN_OPENCODE_KNOWLEDGE = 12288  # a file body on top of that prompt; kept so these examples are not all plain
 SYSTEM = json.loads(SMOKE.read_text())["system_line"]
-COUNTS = {"abi": 800, "u256": 400, "create": 200, "run": 400, "files": 600, "negative": 594, "knowledge": 500, "run_limit": 60}
+COUNTS = {"abi": 800, "u256": 400, "create": 200, "run": 400, "files": 600, "negative": 594, "knowledge": 500, "run_limit": 60, "general": 300}
 TOOLS = [ETH_TOOL, *ST.TOOLS]
 OPENCODE = json.loads((RV / "data/ft1/opencode_capture.json").read_text())  # captured from a real eval request
 PHRASINGS = RV / "data/ft1/phrasings.jsonl"  # questions written by a model; answers are extracted file text
@@ -195,6 +195,25 @@ def run(r):
     return (f"On the built-in amm contract, what does getAmountOut({a}, {x}, {y}) return?", [f"run amm {cd}"], says("getAmountOut"))
 
 
+def general_rows():
+    """Ordinary questions with nothing to do with Ethereum, and the human answers Dolly ships with (CC-BY-SA-3.0): with
+    the tools offered, the right move is to answer and call nothing. Never the red-flag prompts, which are the eval."""
+    import csv  # noqa: F401  (kept beside dmind_rows' import style)
+    from huggingface_hub import hf_hub_download
+
+    flags = {p.strip().lower() for p in json.loads((RV / "scripts/redflag_prompts.json").read_text())}
+    bad = ("ethereum", "blockchain", "crypto", "token", "solidity", "bitcoin", "smart contract", "wallet", "nft", "defi", "web3")
+    rows = [json.loads(x) for x in open(hf_hub_download("databricks/databricks-dolly-15k", "databricks-dolly-15k.jsonl", repo_type="dataset"))]
+    random.Random(SEED + 7).shuffle(rows)
+    out = []
+    for r in rows:
+        q, a = r["instruction"].strip(), r["response"].strip()
+        if r.get("context") or not q or not a or len(a) > 1200 or q.lower() in flags or any(b in (q + a).lower() for b in bad):
+            continue
+        out.append((q, a))
+    return out
+
+
 def run_limit(r):
     """Seen in the evals: `run` given an address on a fork. It runs only the built-in contracts, so no call is right."""
     a, who = addr(r, 0.0), addr(r, 0.5)
@@ -314,6 +333,7 @@ def init():
             s.call("put" if i == 0 else "append", name, piece)
     G["dev"] = s.dev
     G["dmind"] = dmind_rows()
+    G["general"] = general_rows()
     G["kpool"] = knowledge_pool()
 
 
@@ -399,6 +419,11 @@ def make(job):
             return finish({**meta, "source": "dmind/" + sub}, q, [], a, r)
         if family in ("files", "knowledge"):
             return make_knowledge(meta, family, i, r)
+        if family == "general":
+            if i >= len(G["general"]):
+                return None, "general_exhausted"
+            q, ans = G["general"][i]
+            return finish({**meta, "source": "dolly"}, q, [], ans, r)
         if family == "run_limit":
             q, a = run_limit(r)
             return finish(meta, q, [], a, r)

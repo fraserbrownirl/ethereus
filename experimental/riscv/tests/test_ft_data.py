@@ -24,7 +24,7 @@ def data(tmp_path_factory):
 
 def test_every_family_written(data):
     rows, man = data
-    assert {r["family"] for r in rows} == {"abi", "u256", "create", "run", "files", "negative", "knowledge", "run_limit"}
+    assert {r["family"] for r in rows} == {"abi", "u256", "create", "run", "files", "negative", "knowledge", "run_limit", "general"}
     assert len(man["firmware_sha256"]) == 64
 
 
@@ -81,7 +81,7 @@ def test_run_limit_rows_call_nothing_and_say_why(data):
 
 def test_negatives_call_nothing(data):
     for r in data[0]:
-        if r["family"] == "negative":
+        if r["family"] in ("negative", "general"):
             assert all(s["role"] != "assistant_call" for s in r["segments"])
 
 
@@ -162,3 +162,10 @@ def test_question_filter():
     assert not g.question_ok("What does the reference say about oracles?", "Check staleness on every read", [])
     assert g.question_ok("How should I guard against stale prices?", "Check staleness on every read", [])
 
+
+
+def test_general_rows_never_use_the_red_flag_prompts(data):
+    flags = {p.strip().lower() for p in json.loads((RV / "scripts/redflag_prompts.json").read_text())}
+    for r in data[0]:
+        if r["family"] == "general":
+            assert r["messages"][1]["content"].strip().lower() not in flags
