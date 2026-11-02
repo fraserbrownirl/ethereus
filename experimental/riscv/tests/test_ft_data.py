@@ -24,7 +24,7 @@ def data(tmp_path_factory):
 
 def test_every_family_written(data):
     rows, man = data
-    assert {r["family"] for r in rows} == {"abi", "u256", "create", "run", "files", "negative", "knowledge"}
+    assert {r["family"] for r in rows} == {"abi", "u256", "create", "run", "files", "negative", "knowledge", "run_limit"}
     assert len(man["firmware_sha256"]) == 64
 
 
@@ -69,6 +69,14 @@ def test_spilled_rows_train_the_full_call_and_answer_on_the_rewritten_one(data):
         assert all(not s["train"] for s in r["call_segments"][:-1])
         assert "@spill/" in r["messages"][-3]["tool_calls"][0]["function"]["arguments"]["cmd"]
         assert not r["tool_outputs"][-1].startswith("error")
+
+
+def test_run_limit_rows_call_nothing_and_say_why(data):
+    rows = [r for r in data[0] if r["family"] == "run_limit"]
+    assert rows
+    for r in rows:
+        assert all(s["role"] != "assistant_call" for s in r["segments"])
+        assert "built-in" in r["messages"][-1]["content"] and "`run`" in r["messages"][-1]["content"]
 
 
 def test_negatives_call_nothing(data):

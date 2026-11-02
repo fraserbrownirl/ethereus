@@ -155,6 +155,19 @@
     "es/blocks.md": 1,
     "es/protocol.md": 4
    }
+  },
+  "run_limit": {
+   "wanted": 60,
+   "written": 60,
+   "heldout": 6,
+   "rejected": {},
+   "max_tokens": 8144,
+   "variants": {
+    "plain": 41,
+    "opencode_system": 4,
+    "opencode_tools": 15
+   },
+   "sources": {}
   }
  },
  "sample": [

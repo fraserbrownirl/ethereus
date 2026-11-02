@@ -60,7 +60,7 @@ def main() -> None:
     ap.add_argument("--firmware", default="tests/data/rv/calc-bridge.elf")
     ap.add_argument("--questions", default=str(DEFAULT_QUESTIONS))
     ap.add_argument("--out", default="build/smoke_knowledge.json")
-    ap.add_argument("--max-new", type=int, default=400)
+    ap.add_argument("--max-new", type=int, default=8000)  # the largest file is over 6,000 tokens; 400 cut answers off
     ap.add_argument("--dry-run", action="store_true")
     args = ap.parse_args()
 

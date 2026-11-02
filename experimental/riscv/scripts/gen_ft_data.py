@@ -41,7 +41,7 @@ SEED = 20261101
 MAX_LEN = 8192  # the spec says 4096, but real OpenCode prompts alone are about 7,400 tokens
 MAX_LEN_OPENCODE_KNOWLEDGE = 12288  # a file body on top of that prompt; kept so these examples are not all plain
 SYSTEM = json.loads(SMOKE.read_text())["system_line"]
-COUNTS = {"abi": 800, "u256": 400, "create": 200, "run": 400, "files": 600, "negative": 594, "knowledge": 500}
+COUNTS = {"abi": 800, "u256": 400, "create": 200, "run": 400, "files": 600, "negative": 594, "knowledge": 500, "run_limit": 60}
 TOOLS = [ETH_TOOL, *ST.TOOLS]
 OPENCODE = json.loads((RV / "data/ft1/opencode_capture.json").read_text())  # captured from a real eval request
 PHRASINGS = RV / "data/ft1/phrasings.jsonl"  # questions written by a model; answers are extracted file text
@@ -193,6 +193,17 @@ def run(r):
     a, x, y = r.randint(1, 99), r.randint(100, 9999), r.randint(100, 9999)
     cd = "0x" + sel("getAmountOut(uint256,uint256,uint256)") + word(a) + word(x) + word(y)
     return (f"On the built-in amm contract, what does getAmountOut({a}, {x}, {y}) return?", [f"run amm {cd}"], says("getAmountOut"))
+
+
+def run_limit(r):
+    """Seen in the evals: `run` given an address on a fork. It runs only the built-in contracts, so no call is right."""
+    a, who = addr(r, 0.0), addr(r, 0.5)
+    fn = r.choice([f"balanceOf({who})", "totalSupply()", "decimals()", f"getMarkets()", f"owner()"])
+    q = r.choice([f"Use eth to call {fn} on the contract at {a}.", f"Run {fn} on the deployed contract {a} with the eth tool.",
+                  f"Can eth run tell me what {fn} returns for the mainnet contract at {a}?",
+                  f"What does {fn} return on {a}? Use `run`."])
+    return q, (f"The `run` command only executes its built-in `erc20` and `amm` contracts on their fixed state, so it can't call "
+               f"the contract at `{a}`. That needs a call against a real node, such as an RPC or `cast call`.")
 
 
 NEGATIVE = [
@@ -388,6 +399,9 @@ def make(job):
             return finish({**meta, "source": "dmind/" + sub}, q, [], a, r)
         if family in ("files", "knowledge"):
             return make_knowledge(meta, family, i, r)
+        if family == "run_limit":
+            q, a = run_limit(r)
+            return finish(meta, q, [], a, r)
         q, cmds, answer = {"abi": abi, "u256": u256, "create": create, "run": run}[family](r)
         ses, steps, outs = session(), [], []
         for cmd in cmds:

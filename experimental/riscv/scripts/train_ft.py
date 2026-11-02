@@ -180,6 +180,10 @@ def cmd_train(a) -> int:
     model = AutoModelForImageTextToText.from_pretrained(a.base, dtype=torch.bfloat16).to(dev)
     text, head = model.model.language_model, model.lm_head
     tr_rows, ho_rows = load_rows(Path(a.data))
+    if a.limit_rows:  # a short probe: speed, memory, the loss moving; shuffled so it spans the families
+        random.Random(a.seed).shuffle(tr_rows)
+        random.Random(a.seed).shuffle(ho_rows)
+        tr_rows, ho_rows = tr_rows[: a.limit_rows], ho_rows[: max(1, a.limit_rows // 4)]
     tr, ho = examples(tr_rows), examples(ho_rows)
     out = Path(a.out)
     out.mkdir(parents=True, exist_ok=True)
@@ -277,6 +281,7 @@ def main() -> int:
     t.add_argument("--micro-tokens", type=int, default=40000)
     t.add_argument("--seed", type=int, default=0)
     t.add_argument("--log-every", type=int, default=5)
+    t.add_argument("--limit-rows", type=int, default=0)
     p = sub.add_parser("apply")
     p.add_argument("--merged", required=True)
     p.add_argument("--lora", required=True)
