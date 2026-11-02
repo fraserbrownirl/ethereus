@@ -52,12 +52,11 @@ In all 9 held tasks the key is in `[verifier.env]`, no agent or environment sect
 
 ## Results
 
-Internet, 9B, through 2026-11-01 17:30 UTC, before the 7 mainnet-fork tasks:
+Internet, 9B, all 37 tasks, finished 2026-11-02 01:30 UTC:
 
-| Arm | Tasks scored | Tasks passed | Source on the eval VM |
+| Arm | Tasks | Passed | Source on the eval VM |
 |---|---|---|---|
-| Base | 30 | 6 | `results/internet-nokey-base`, `results/internet-rest-base` |
-| Ethereus | 30 | 6 | `results/internet-nokey-rv2`, `results/internet-rest-rv2` |
+| Base | 37 | 6 | `results/internet-nokey-base`, `results/internet-rest-base`, `results/internet-fork-base` |
+| Ethereus | 37 | 6 | `results/internet-nokey-rv2`, `results/internet-rest-rv2`, `results/internet-fork-rv2` |
 
-Both arms pass the same 6 tasks. The circuit ran in no trial, so this does not yet measure the circuit. In the base judged batch one `voting-page` trial has no score (`RewardFileNotFoundError`), and three trials hit the agent timeout.
-
+Both arms pass the same 6 tasks. The circuit ran in 3 of the Ethereus arm's calls, all misuses of `run` on one task, so this does not yet measure the circuit. On the fork tasks some trials on each arm ended at the 45-minute agent limit or were killed at the task container's memory limit (exit 137). They count as 0, and base's `voting-page` judge error is unscored.

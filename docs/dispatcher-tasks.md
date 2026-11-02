@@ -4,9 +4,9 @@ Single list for the core repo and Route A; the Cursor agent and Muse are retired
 
 | Task | State | Blocker | Started | Finished | Result |
 |---|---|---|---|---|---|
-| Fork batch: 7 mainnet-fork tasks, Internet, both arms | running | | 2026-11-01 17:30 | | |
+| Fork batch: 7 mainnet-fork tasks, Internet, both arms | done | | 2026-11-01 17:30 | 2026-11-02 01:30 | 0 of 7 in both arms; totals 6 of 37 in both |
 | Judged batch: 6 judged tasks plus witness-string rerun, Internet, both arms | done | | 2026-11-01 13:28 | 2026-11-01 17:30 | 0 of 7 in both arms; totals 6 of 30 in both |
-| Ethereus test, before the spill fix, three arms | queued | Needs the GPU after the eval batches | | | |
+| Ethereus test, before the spill fix, three arms | running | | 2026-11-02 01:30 | | |
 | Rerun three-call `serve.py` test on the eval VM, then Fraser can destroy 58623317 | queued | Runs automatically after the Ethereus test's before run | | | |
 | Environment pin check: gates log torch, transformers, fla, triton and driver; Results row goes amber on a difference from the pinned venv | done | | 2026-11-01 | 2026-11-01 | |
 | Canary: one command runs the three-call conversation with replay after any firmware, snapshot, driver or venv change | queued | Script ready; first run needs the GPU free | 2026-11-01 | | |
