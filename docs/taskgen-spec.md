@@ -28,3 +28,7 @@ Sources so far: OpenZeppelin Contracts v5.7.0, solady 258f67c, PRBMath v4.1.0, a
 ## Layout
 
 `experimental/taskgen/`: `kind1.py`, `kind2.py`, `kind3.py`, `validate.py` (local pre-filter in the verifier's layout), `out/` (generated tasks, gitignored), `sources/` (pinned clones, gitignored), `manifest.json` per run.
+
+## Held-out test set
+
+Fraser, 2026-11-02: 2 Kind 1 tasks per source (8 of 50) are never trained on. Chosen as the two lowest `sha256("holdout:" + name)` per source, so the choice is reproducible and not by hand. Ids and the 42 training tasks: `experimental/taskgen/kind1-split.json`. Held out: `k1-oz-02d959d2-tracea4e2`, `k1-oz-d05b3326-foldt724`, `k1-dragonfly-db3ab910-packfe6b`, `k1-dragonfly-da4fc229-foldw7c0`, `k1-solady-e4437fda-decode`, `k1-solady-83643ee8-siftce1e`, `k1-prb-303d2ff1-tracei693`, `k1-prb-b5715c51-carveu882`. Training tasks may come from the same source file as a held-out one (up to 3 per file); a stricter split would drop those.

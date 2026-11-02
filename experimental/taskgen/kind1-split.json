@@ -1,0 +1,90 @@
+{
+ "kind": 1,
+ "rule": "2 per source, the two lowest sha256('holdout:'+name); never trained on; Fraser 2026-11-02",
+ "holdout": [
+  {
+   "task": "k1-oz-02d959d2-tracea4e2",
+   "proof_dir": "/workspace/taskgen/kind1v3",
+   "source": "oz"
+  },
+  {
+   "task": "k1-oz-d05b3326-foldt724",
+   "proof_dir": "/workspace/taskgen/kind1v3",
+   "source": "oz"
+  },
+  {
+   "task": "k1-dragonfly-db3ab910-packfe6b",
+   "proof_dir": "/workspace/taskgen/kind1v4",
+   "source": "dragonfly"
+  },
+  {
+   "task": "k1-dragonfly-da4fc229-foldw7c0",
+   "proof_dir": "/workspace/taskgen/kind1v4",
+   "source": "dragonfly"
+  },
+  {
+   "task": "k1-prb-303d2ff1-tracei693",
+   "proof_dir": "/workspace/taskgen/kind1v6",
+   "source": "prb"
+  },
+  {
+   "task": "k1-prb-b5715c51-carveu882",
+   "proof_dir": "/workspace/taskgen/kind1v6",
+   "source": "prb"
+  },
+  {
+   "task": "k1-solady-e4437fda-decode",
+   "proof_dir": "/workspace/taskgen/kind1v6",
+   "source": "solady"
+  },
+  {
+   "task": "k1-solady-83643ee8-siftce1e",
+   "proof_dir": "/workspace/taskgen/kind1v6",
+   "source": "solady"
+  }
+ ],
+ "train": [
+  "k1-dragonfly-04c3d6a7-sifts6ba",
+  "k1-dragonfly-07f9f4c3-packccb4",
+  "k1-dragonfly-21ebe6c5-die",
+  "k1-dragonfly-26c81d64-siftm5ce",
+  "k1-dragonfly-26d4ef24-settlei404",
+  "k1-dragonfly-334e36cc-renderif21",
+  "k1-dragonfly-4b549429-computec033",
+  "k1-dragonfly-7483785d-packpe06",
+  "k1-dragonfly-8999f90c-shapet013",
+  "k1-dragonfly-91fa322a-deriveccac",
+  "k1-dragonfly-a142849b-packg284",
+  "k1-dragonfly-e8137591-siftfa80",
+  "k1-dragonfly-f87019ad-carves629",
+  "k1-oz-085350f6-derivec7c6",
+  "k1-oz-108d16a4-settleeb7c",
+  "k1-oz-26bada53-computen1c0",
+  "k1-oz-2b9cf767-settlee92d",
+  "k1-oz-3291e5f7-get",
+  "k1-oz-3accdfff-renderc8ab",
+  "k1-oz-3d4241d5-resolvei3c8",
+  "k1-oz-4fd58aca-foldu13e",
+  "k1-oz-856b8188-resolveeae3",
+  "k1-oz-9aaaa3f3-packd236",
+  "k1-oz-b54bd876-settleta9b",
+  "k1-oz-bd34efd9-carvecb9d",
+  "k1-oz-e0fb9d1c-computepe71",
+  "k1-prb-4fdc5789-siftuebd",
+  "k1-prb-6605c6f1-deriveu05c",
+  "k1-prb-8c72e9bf-carveubd0",
+  "k1-solady-0641d727-foldd4f6",
+  "k1-solady-1c6cb9d0-computeb739",
+  "k1-solady-2cde2707-blendddfb",
+  "k1-solady-358e7355-computevc14",
+  "k1-solady-37716a80-settleo037",
+  "k1-solady-4ceb1361-decode",
+  "k1-solady-7d26f26a-renderp2f6",
+  "k1-solady-a3d226fd-encode",
+  "k1-solady-b8bb1c7b-computerb34",
+  "k1-solady-c3c4056a-blendd881",
+  "k1-solady-c6f08568-foldreb2",
+  "k1-solady-f6c29ce3-siftp2bd",
+  "k1-solady-f88e622f-packt1bb"
+ ]
+}
