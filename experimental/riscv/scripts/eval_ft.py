@@ -87,6 +87,7 @@ def main() -> int:
     ap.add_argument("--out", required=True)
     ap.add_argument("--max-new", type=int, default=1500)
     ap.add_argument("--limit", type=int, default=0)
+    ap.add_argument("--per-family", type=int, default=0, help="the first N held-out rows of each family, the same N for every model")
     a = ap.parse_args()
     from chipformer.rv import serve, spill
 
@@ -95,7 +96,11 @@ def main() -> int:
     out = Path(a.out)
     out.mkdir(parents=True, exist_ok=True)
     rows = [json.loads(ln) for f in TOOL_FAMILIES for ln in (Path(a.data) / f"{f}.jsonl").read_text().splitlines()]
-    rows = [r for r in rows if r["split"] == "heldout"][: a.limit or None]
+    rows = [r for r in rows if r["split"] == "heldout"]
+    if a.per_family:
+        seen = {}
+        rows = [r for r in rows if seen.setdefault(r["family"], []).append(r) or len(seen[r["family"]]) <= a.per_family]
+    rows = rows[: a.limit or None]
     res = []
     with open(out / "heldout.jsonl", "w") as fh:
         for r in rows:
