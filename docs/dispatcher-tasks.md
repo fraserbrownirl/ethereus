@@ -18,7 +18,7 @@ Single list for the core repo and Route A; the Cursor agent and Muse are retired
 | Regenerate `run` and calldata fine-tune families with real addresses | done | On branch `spill-eth-in`; regenerate if the firmware changes again | ELF hash in the data manifest | 2026-11-01 | 2026-11-01 | 763 spilled rows, all match an independent check; 56 create2 rows |
 | GPU test of `serve.py` store support | done | | q9-store-rv, snapshot c2f24eca | 2026-11-02 | 2026-11-02 | RESULT PASS, including an exact `get`, 0 wrong on replay |
 | +Skills arm on `q9-store-rv` | blocked | Stopped for training, 8 of 74 trials; resume after | q9-store-rv, snapshot c2f24eca | 2026-11-02 | | |
-| 4B evals on a rented L4, up to $0.50/h | queued | After the 9B evals | none; needs its own merged 4B checkpoint | | | |
+| 4B evals on a rented L4, up to $0.50/h | blocked | Credit: $20.55 covers about 13 hours of the eval VM, which the fine-tune needs; start after a top-up | none; needs its own merged 4B checkpoint | | | |
 | `docs/ethevals-submission.md` final draft | queued | Needs both backbones' numbers | each arm's results folder | | | |
 | Fine-tune data generator, `scripts/gen_ft_data.py` | done | | ELF hash, snapshot pack | 2026-11-01 | 2026-11-02 | sample approved by Fraser; 60 `run_limit` rows added after |
 | Fine-tune training and evaluation, `docs/finetune-spec-v1.md` | running | ft1 failed KL against stock (0.075); ft1b training with the KL term; ft1 tool checks running | data/ft1 jsonl, base 9B, then q9-store-rv for apply | 2026-11-02 | | |
