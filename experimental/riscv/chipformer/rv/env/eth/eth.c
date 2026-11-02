@@ -735,12 +735,15 @@ static int eth_eval(void){
 int main(void){
     for(;;){
         rv_ecall2(93,0,0,0);
-        int n=gather_call();
+        // The host moved an over-window call here (spill.py). Used once, and the capture is not read at all:
+        // a restart clears the circuit's capture while the reference's holds the call, so reading it would
+        // make the two machines run differently and fail the lockstep.
+        int spilled=eth_in[0]!=0;
+        int n=spilled?0:gather_call();
         put('\n');
         put(TOOL_RESPONSE);
         put('\n');
-        if(eth_in[0]){
-            // The host moved an over-window call here (spill.py); used once, whatever was captured.
+        if(spilled){
             handle_cmd(eth_in);
             eth_in[0]=0;
         } else if(n<0){
