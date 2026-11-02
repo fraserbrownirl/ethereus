@@ -95,7 +95,10 @@ def rescore(out: Path, data: Path, decode) -> dict:
         full = x.get("full_cmd")
         if x.get("spilled") and full is None:
             want, approx = rewritten_call(r), approx + 1
-        y = score_tool_row(r, x["text"], want, full)
+        text = x["text"]
+        if x.get("final_text") is not None and len(text) >= 2000:
+            text += "</tool_response>" + x["final_text"]  # the saved text is cut; its final answer is saved apart
+        y = score_tool_row(r, text, want, full)
         if "final_text" not in x and len(x["text"]) >= 2000:
             y["final_ok"], finals_kept = x["final_ok"], finals_kept + 1  # text cut before the answer: keep the run's own verdict
         res.append(y)
@@ -145,7 +148,7 @@ def main() -> int:
             first = turn.segments[0].get("gen_ids", [])
             full = spill.parse_cmd(decode(eng._visible(first))) if turn.spilled else None
             x = score_tool_row(r, turn.text, expected_call(r, decode), full)
-            x |= {"text": turn.text[:2000], "final_text": after_last_response(turn.text)[-2000:], "spilled": turn.spilled, "full_cmd": full, "lock_error": str(turn.lock_error) if turn.lock_error else None}
+            x |= {"text": turn.text, "final_text": after_last_response(turn.text), "spilled": turn.spilled, "full_cmd": full, "lock_error": str(turn.lock_error) if turn.lock_error else None}
             res.append(x)
             fh.write(json.dumps(x) + "\n")
             fh.flush()
