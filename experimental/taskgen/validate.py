@@ -65,11 +65,17 @@ def run(root: Path, timeout: int = 1800) -> dict:
         data = json.loads(r.stdout)
     except json.JSONDecodeError:
         data = None
+    dupes = set()
     if isinstance(data, dict):
         for suite, result in data.items():
             for name, test in (result.get("test_results") or {}).items():
                 passed = test["status"] == "Success"
-                checks[name.partition("(")[0]] = {"passed": passed, "reason": "" if passed else " ".join(str(test.get("reason") or test["status"]).split())}
+                key = name.partition("(")[0]
+                if key in checks:
+                    dupes.add(key)  # ETH Evals' forge_checks.py refuses a task whose suites share a test name
+                checks[key] = {"passed": passed, "reason": "" if passed else " ".join(str(test.get("reason") or test["status"]).split())}
+    if dupes:
+        return {"compiled": False, "reason": f"test names repeat across suites: {sorted(dupes)[:3]}", "checks": {}}
     reason = None
     if not checks:
         lines = (r.stdout + "\n" + r.stderr).splitlines()
