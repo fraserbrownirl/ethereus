@@ -147,10 +147,12 @@ def main() -> int:
             for target in sorted(targets):
                 if made >= a.per_source or (spec["key"], target) in seen_files:
                     continue
-                kept, base = 0, None
+                kept, base, used = 0, None, set()
                 for fn in sorted(functions((root / target).read_text()), key=lambda f: -f["lines"]):
                     if kept >= a.per_file or made >= a.per_source:
                         break
+                    if fn["name"].rstrip("0123456789_") in used:  # overloads and numbered twins are near copies
+                        continue
                     seed = f"k2:{spec['key']}:{test_file}:{target}:{fn['name']}:{fn['start']}"
                     try:
                         orig, _, names = build_task(spec, root, test_file, files, target, fn, seed)
@@ -192,6 +194,7 @@ def main() -> int:
                         print(f"TASK {name} {target}:{fn['name']} {cls}/{what} fails {len(failing)} of {len(base['checks'])}", flush=True)
                         kept += 1
                         made += 1
+                        used.add(fn["name"].rstrip("0123456789_"))
                         break
                 if kept:
                     seen_files.add((spec["key"], target))
