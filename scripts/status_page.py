@@ -67,8 +67,9 @@ def gates(D):
         g["verify"] = {"line": m[0][:60] if m else U_, "file": f}
     return g
 U_ = "unknown"
-out["gates"]["q9-rv2"] = gates("/workspace/ethereus/dist/q9-rv2")
-out["gates"]["q9-store-rv"] = gates("/workspace/dist-store/q9-store-rv")
+out["gates"]["Ethereus-9B (untrained), q9-rv2"] = gates("/workspace/ethereus/dist/q9-rv2")
+out["gates"]["Ethereus-9B (untrained), with files"] = gates("/workspace/dist-store/q9-store-rv")
+out["gates"]["Ethereus-9B-v0.1"] = gates("/workspace/dist-store/q9-store-rv-ft1b")
 GROUPS = {"base": ["internet-nokey-base", "internet-nokey-base-capped", "internet-rest-base", "internet-fork-base"],
           "ethereus": ["internet-nokey-rv2", "internet-rest-rv2", "internet-fork-rv2"]}
 for arm, names in GROUPS.items():

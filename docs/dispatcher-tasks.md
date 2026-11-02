@@ -25,7 +25,7 @@ Single list for the core repo and Route A; the Cursor agent and Muse are retired
 | 4B evals on a rented L4, up to $0.50/h | blocked | Credit: $20.55 covers about 13 hours of the eval VM, which the fine-tune needs; start after a top-up | none; needs its own merged 4B checkpoint | | | |
 | `docs/ethevals-submission.md` final draft | queued | Needs both backbones' numbers | each arm's results folder | | | |
 | Fine-tune data generator, `scripts/gen_ft_data.py` | done | | ELF hash, snapshot pack | 2026-11-01 | 2026-11-02 | sample approved by Fraser; 60 `run_limit` rows added after |
-| Fine-tune training and evaluation, `docs/finetune-spec-v1.md` | done | ft1b: KL 0.0078, MMLU 78.6 (stock 78.0), knowledge with files 11 of 20 (target 12), 48 tool questions 45 right calls, finals 45, unneeded calls 0 of 50, Ethereus test 13 of 15 | data/ft1 jsonl, base 9B, then q9-store-rv for apply | 2026-11-02 | | |
+| Fine-tune training and evaluation, `docs/finetune-spec-v1.md` | done | Ethereus-9B-v0.1: KL 0.0078, MMLU 78.6 (stock 78.0), knowledge with files 11 of 20 (target 12), 48 tool questions 45 right calls, finals 45, unneeded calls 0 of 50, Ethereus test 13 of 15 | data/ft1 jsonl, base 9B, then q9-store-rv for apply | 2026-11-02 | | |
 | Status console, `scripts/status_page.py` | done | | docs/status.html | 2026-11-01 | 2026-11-01 | |
 | Clean `.env`, `push_secrets.py` | done | | none | 2026-11-01 | 2026-11-01 | `eba5d52` |
 | No-key Internet run, circuit arm | done | | q9-rv2 | 2026-11-01 | 2026-11-01 | 6/24 tasks, 12/48 trials |

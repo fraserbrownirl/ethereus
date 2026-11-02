@@ -1,5 +1,7 @@
 # Ethereus tool-use fine-tune — spec v1
 
+Names (Fraser, 2026-11-02): the checkpoint this spec produced, ft1b, is **Ethereus-9B-v0.1**; the untrained circuit model is **Ethereus-9B (untrained)**; stock is **Qwen3.5-9B**.
+
 Date: 2026-11-01. Owner: the dispatcher. Goal: a 9B checkpoint that *reaches for* `eth` and `files` when it should, with the circuit untouched and the gates still green.
 
 ## 1. The problem, in numbers
