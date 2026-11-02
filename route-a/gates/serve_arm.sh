@@ -3,7 +3,7 @@
 set -euo pipefail
 W=/workspace; ARM=$1
 pkill -f "chipformer.rv.serve:from_env" 2>/dev/null || true; sleep 3
-if [ "$ARM" = rv2 ] && [ ! -f $W/gate4-keep1.ok ]; then
+if [ "$ARM" = rv2 ] && [ ! -f $W/gate4-keep1.ok ]; then  # old arms only
   # logits_to_keep=1 changed the driver: gate 4 must reproduce the pinned run's token counts first.
   bash $W/ethereus/route-a/gates/gate4_recheck.sh || { echo "gate 4 recheck failed, not starting rv2"; exit 1; }
 fi
@@ -13,7 +13,22 @@ export PYTORCH_ALLOC_CONF=expandable_segments:True
 export ETHEREUS_DATA=$W/serve-data/$ARM CORE_COMMIT=$(git -C $W/ethereus rev-parse --short HEAD)
 export FIRMWARE=$W/ethereus/experimental/riscv/tests/data/rv/eth-bridge.elf
 CODE=$W/ethereus/experimental/riscv
-if [ "$ARM" = base ]; then export ETHEREUS_BASE=1 MODEL=$W/models/Qwen3.5-9B MODEL_ID=q9-base
+# Step 3 arms (Fraser, 2026-11-02): every arm on main's code and firmware (spill on, ELF 7c4175e6).
+LINE="Files under es/ hold the ethskills reference; before answering, list them and get whatever is relevant."  # the training data's system line
+MAIN=$W/ethereus-main/experimental/riscv
+case "$ARM" in
+  stock|untrained|v01|v01-skills)
+    CODE=$MAIN; export FIRMWARE=$MAIN/tests/data/rv/eth-bridge.elf CORE_COMMIT=$(git -C $W/ethereus-main rev-parse --short HEAD)
+    unset ETHEREUS_BASE SNAPSHOT ETHEREUS_SYSTEM_LINE ;;
+esac
+case "$ARM" in
+  stock) export ETHEREUS_BASE=1 MODEL=$W/models/Qwen3.5-9B MODEL_ID=q9-base ;;
+  untrained) export MODEL=$W/dist-store/q9-store-rv MODEL_ID=q9-rv2 ;;
+  v01) export MODEL=$W/dist-store/q9-store-rv-ft1b MODEL_ID=q9-rv2 ETHEREUS_SYSTEM_LINE="$LINE" ;;
+  v01-skills) export MODEL=$W/dist-store/q9-store-rv-ft1b MODEL_ID=q9-rv2 ETHEREUS_SYSTEM_LINE="$LINE" SNAPSHOT=$MAIN/build/ethskills.fs.npz ;;
+esac
+if [[ "$ARM" =~ ^(stock|untrained|v01|v01-skills)$ ]]; then :
+elif [ "$ARM" = base ]; then export ETHEREUS_BASE=1 MODEL=$W/models/Qwen3.5-9B MODEL_ID=q9-base
 elif [ "$ARM" = store ]; then  # Internet+Skills: the store checkpoint, its files, one line about es/, on main's code
   unset ETHEREUS_BASE; CODE=$W/ethereus-main/experimental/riscv; export MODEL=$W/dist-store/q9-store-rv MODEL_ID=q9-rv2
   export FIRMWARE=$CODE/tests/data/rv/eth-bridge.elf SNAPSHOT=$CODE/build/ethskills.fs.npz
