@@ -530,6 +530,13 @@ summary{{cursor:pointer;color:#9bd}}.ok{{color:#6c6}}.bad{{color:#d77}}.warn{{co
                   ["git", "commit", "-q", "-m", "status: tick\n\nCo-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>", "--", "docs/status.html"],
                   ["git", "pull", "-q", "--rebase", "origin", "main"], ["git", "push", "-q", "origin", "main"]):
             subprocess.run(c, cwd=REPO, capture_output=True)
+        # Fraser, 2026-11-02: the console is also at https://ethereus-console.vercel.app. Only this page is deployed,
+        # from its own folder (its .vercelignore admits index.html and vercel.json); detached, so a tick never waits.
+        site = Path.home() / "Dev/ethereus-console"
+        if (site / ".vercel/project.json").exists():
+            (site / "index.html").write_text(page)
+            subprocess.Popen(["vercel", "deploy", "--prod", "--yes"], cwd=site, stdout=subprocess.DEVNULL,
+                             stderr=subprocess.DEVNULL, start_new_session=True)
 
 
 main()
