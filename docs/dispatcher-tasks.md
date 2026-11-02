@@ -5,7 +5,7 @@ Single list for the core repo and Route A; the Cursor agent and Muse are retired
 | Task | State | Blocker | Crossing artefact | Started | Finished | Result |
 |---|---|---|---|---|---|---|
 | K3 merge: compiled layers into Kimi K3 (mixture-of-experts, gated delta), its gates | queued | Priority after ft1b's gates (Fraser, 2026-11-02); first step a feasibility note: weights, size, layer layout, where compiled layers fit in an MoE | firmware ELF 8f07bfe3 and the circuit; nothing from the 9B checkpoints | | | |
-| Task generator for step 3 (`/path` Fix one): exact Ethereum tasks at scale, labels from the reference machine, for fine-tune rounds and the open call's traces | queued | Runs in parallel with K3 (Fraser); needs no GPU | none; uses the firmware and the oracle | | | |
+| Task generator for step 3: Solidity build tasks scored by machines, three kinds, Harbor format, 50 proven per kind (Fraser) | running | Kind 1 generating on the Mac; Harbor proof on the VM next | none; uses OpenZeppelin v5.7.0 and real findings | 2026-11-02 | | |
 | API and open call | blocked | Wait for K3: the flywheel pays off only on a model builders prefer (Fraser) | the K3 checkpoint | | | |
 | Fork batch: 7 mainnet-fork tasks, Internet, both arms | done | | none; needs the GPU only | 2026-11-01 17:30 | 2026-11-02 01:30 | 0 of 7 in both arms; totals 6 of 37 in both |
 | Judged batch: 6 judged tasks plus witness-string rerun, Internet, both arms | done | | none | 2026-11-01 13:28 | 2026-11-01 17:30 | 0 of 7 in both arms; totals 6 of 30 in both |
