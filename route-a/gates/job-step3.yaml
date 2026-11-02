@@ -1,0 +1,225 @@
+# Step 3 (2026-11-02): board parity per docs/ethevals-review.md on main: Exa search, OpenCode output limit, high effort; names per Fraser.
+{
+  "harbor_version": "0.24.0",
+  "n_attempts": 2,
+  "retry": {
+    "max_retries": 1
+  },
+  "judge": {
+    "model": "anthropic/claude-opus-5-5",
+    "effort": "high",
+    "paid_by": "api_key",
+    "cost_limit_usd": 2.0,
+    "key_env": "ANTHROPIC_API_KEY"
+  },
+  "modes": [
+    "vanilla",
+    "internet",
+    "skills"
+  ],
+  "models": {
+    "ethereus-9b-v0.1": {
+      "name": "ethereus/ethereus-9b-v0.1",
+      "effort": "high"
+    },
+    "ethereus-9b-untrained": {
+      "name": "ethereus/ethereus-9b-untrained",
+      "effort": "high"
+    },
+    "qwen3.5-9b": {
+      "name": "ethereus/qwen3.5-9b",
+      "effort": "high"
+    },
+    "ethereus-9b-v0.1-api": {
+      "name": "openai/ethereus-9b-v0.1"
+    },
+    "ethereus-9b-untrained-api": {
+      "name": "openai/ethereus-9b-untrained"
+    },
+    "qwen3.5-9b-api": {
+      "name": "openai/qwen3.5-9b"
+    }
+  },
+  "agents": {
+    "opencode-ethereus-9b-v0.1": {
+      "name": "opencode",
+      "import_path": "ethevals.opencode:OpenCode",
+      "version": "1.18.33",
+      "model": "ethereus-9b-v0.1",
+      "modes": [
+        "internet",
+        "skills"
+      ],
+      "paid_by": "free",
+      "cost_limit_usd": 0.0,
+      "env": {
+        "ETHEREUS_API_KEY": "${ETHEREUS_API_KEY:-}",
+        "EXA_API_KEY": "${EXA_API_KEY:-}",
+        "OPENCODE_EXPERIMENTAL_OUTPUT_TOKEN_MAX": "+131072"
+      },
+      "kwargs": {
+        "opencode_config": {
+          "provider": {
+            "ethereus": {
+              "npm": "@ai-sdk/openai-compatible",
+              "name": "Ethereus eval server",
+              "options": {
+                "baseURL": "http://172.17.0.1:8080/v1",
+                "apiKey": "{env:ETHEREUS_API_KEY}"
+              },
+              "models": {
+                "ethereus-9b-v0.1": {
+                  "name": "Ethereus-9B-v0.1",
+                  "tool_call": true,
+                  "limit": {
+                    "context": 65536,
+                    "output": 8192
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "vanilla-ethereus-9b-v0.1": {
+      "name": "ethevals.vanilla:VanillaAgent",
+      "version": "0.1.0",
+      "model": "ethereus-9b-v0.1-api",
+      "modes": [
+        "vanilla"
+      ],
+      "paid_by": "free",
+      "cost_limit_usd": 0.0,
+      "kwargs": {
+        "completion": {
+          "api_base": "http://localhost:8080/v1",
+          "max_tokens": 8192
+        }
+      },
+      "env": {
+        "OPENAI_API_KEY": "${ETHEREUS_API_KEY:-}"
+      }
+    },
+    "opencode-ethereus-9b-untrained": {
+      "name": "opencode",
+      "import_path": "ethevals.opencode:OpenCode",
+      "version": "1.18.33",
+      "model": "ethereus-9b-untrained",
+      "modes": [
+        "internet",
+        "skills"
+      ],
+      "paid_by": "free",
+      "cost_limit_usd": 0.0,
+      "env": {
+        "ETHEREUS_API_KEY": "${ETHEREUS_API_KEY:-}",
+        "EXA_API_KEY": "${EXA_API_KEY:-}",
+        "OPENCODE_EXPERIMENTAL_OUTPUT_TOKEN_MAX": "+131072"
+      },
+      "kwargs": {
+        "opencode_config": {
+          "provider": {
+            "ethereus": {
+              "npm": "@ai-sdk/openai-compatible",
+              "name": "Ethereus eval server",
+              "options": {
+                "baseURL": "http://172.17.0.1:8080/v1",
+                "apiKey": "{env:ETHEREUS_API_KEY}"
+              },
+              "models": {
+                "ethereus-9b-untrained": {
+                  "name": "Ethereus-9B (untrained)",
+                  "tool_call": true,
+                  "limit": {
+                    "context": 65536,
+                    "output": 8192
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "vanilla-ethereus-9b-untrained": {
+      "name": "ethevals.vanilla:VanillaAgent",
+      "version": "0.1.0",
+      "model": "ethereus-9b-untrained-api",
+      "modes": [
+        "vanilla"
+      ],
+      "paid_by": "free",
+      "cost_limit_usd": 0.0,
+      "kwargs": {
+        "completion": {
+          "api_base": "http://localhost:8080/v1",
+          "max_tokens": 8192
+        }
+      },
+      "env": {
+        "OPENAI_API_KEY": "${ETHEREUS_API_KEY:-}"
+      }
+    },
+    "opencode-qwen3.5-9b": {
+      "name": "opencode",
+      "import_path": "ethevals.opencode:OpenCode",
+      "version": "1.18.33",
+      "model": "qwen3.5-9b",
+      "modes": [
+        "internet",
+        "skills"
+      ],
+      "paid_by": "free",
+      "cost_limit_usd": 0.0,
+      "env": {
+        "ETHEREUS_API_KEY": "${ETHEREUS_API_KEY:-}",
+        "EXA_API_KEY": "${EXA_API_KEY:-}",
+        "OPENCODE_EXPERIMENTAL_OUTPUT_TOKEN_MAX": "+131072"
+      },
+      "kwargs": {
+        "opencode_config": {
+          "provider": {
+            "ethereus": {
+              "npm": "@ai-sdk/openai-compatible",
+              "name": "Ethereus eval server",
+              "options": {
+                "baseURL": "http://172.17.0.1:8080/v1",
+                "apiKey": "{env:ETHEREUS_API_KEY}"
+              },
+              "models": {
+                "qwen3.5-9b": {
+                  "name": "Qwen3.5-9B",
+                  "tool_call": true,
+                  "limit": {
+                    "context": 65536,
+                    "output": 8192
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "vanilla-qwen3.5-9b": {
+      "name": "ethevals.vanilla:VanillaAgent",
+      "version": "0.1.0",
+      "model": "qwen3.5-9b-api",
+      "modes": [
+        "vanilla"
+      ],
+      "paid_by": "free",
+      "cost_limit_usd": 0.0,
+      "kwargs": {
+        "completion": {
+          "api_base": "http://localhost:8080/v1",
+          "max_tokens": 8192
+        }
+      },
+      "env": {
+        "OPENAI_API_KEY": "${ETHEREUS_API_KEY:-}"
+      }
+    }
+  }
+}
