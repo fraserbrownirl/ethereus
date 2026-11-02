@@ -208,9 +208,9 @@ def tasks():
     rows = []
     for line in p.read_text().splitlines():
         cells = [c.strip() for c in line.strip().strip("|").split("|")] if line.startswith("|") else []
-        if len(cells) == 6 and cells[0] not in ("Task", "") and not set(cells[0]) <= set("-: "):
+        if len(cells) == 7 and cells[0] not in ("Task", "") and not set(cells[0]) <= set("-: "):
             rows.append(cells)
-    head = "<tr><th>Task</th><th>State</th><th>Blocker</th><th>Started</th><th>Finished</th><th>Result</th></tr>"
+    head = "<tr><th>Task</th><th>State</th><th>Blocker</th><th>Crossing artefact</th><th>Started</th><th>Finished</th><th>Result</th></tr>"
 
     def tr(r):
         return "<tr>" + "".join(f"<td>{esc(c) if c else U}</td>" for c in r) + "</tr>"

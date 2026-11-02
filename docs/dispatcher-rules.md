@@ -8,3 +8,7 @@ From Fraser, 2026-11-01. Each rule exists because that class of error happened t
 4. **Fixtures proven first.** Any new built-in contract, test vector or snapshot gets its own gate against py-evm or eth_abi before anything else uses it.
 5. **By-design rejections are asserted, not compared.** Inputs the firmware rejects by our decision (stricter than `eth_abi` or the oracle's libraries) are asserted as errors in the gate. The oracle does not model them and they are never compared.
 6. **Two-part reports.** Part 1, for Fraser: five lines at most, plain English, no jargon, file names, hashes or commit ids, answering what happened, is it good or bad, what's next, and what's needed from him. Numbers say what they mean. Questions go here, with options spelled out and a recommendation. Part 2: the full record, collapsed under the heading Details.
+7. **Constraints first.** Read `docs/constraints.md` at the start of every tick and before writing any brief, task or script. Every accepted fix adds one line to it: the rule, and in brackets what caused it.
+8. **Crossing artefacts.** A task waits on another only when an artefact crosses between them, named in the task table's column. With none, run them in parallel.
+9. **Fraser on one step.** His approval: publishing and the never-do list. Everything else is decided from the constraints and these rules and recorded in Part 2 of the report. Part 1 keeps the product framing: most models call tools outside themselves; Ethereus has the tool in its weights, and the fine-tune teaches the model to decide to use it.
+
