@@ -13,6 +13,8 @@ Rules for future work. Each line is the rule an accepted fix implies; the bracke
 
 - A firmware helper that writes its output before it finishes reading its inputs (u256 sub, sub_borrow, shl, shr, sar, divmod) is never called with an output that is also an input; `tests/test_rv_eth_alias.py` checks every call. (the Solana lane's u128_sub_borrow, narrowed from eth's u256_sub_borrow, read `a` after writing `r` when `r == a`; eth has the same helpers but no aliased call)
 
+- Before a resume job touches files, every earlier job that writes or deletes them is confirmed stopped; a copy job deletes its pieces only after the whole file's hash matches the source. (an old copy script, still waiting on stalled downloads, joined an incomplete archive and deleted the parts under a resume job)
+
 ## Oracles, gates and tests
 
 - The oracle is the external library; the firmware moves to match it, never the reverse. (quirk-mirroring harness)
