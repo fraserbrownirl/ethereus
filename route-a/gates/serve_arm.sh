@@ -17,17 +17,19 @@ CODE=$W/ethereus/experimental/riscv
 LINE="Files under es/ hold the ethskills reference; before answering, list them and get whatever is relevant."  # the training data's system line
 MAIN=$W/ethereus-main/experimental/riscv
 case "$ARM" in
-  stock|untrained|v01|v01-skills)
+  stock|untrained|untrained-line|v01|v01-skills)
     CODE=$MAIN; export FIRMWARE=$MAIN/tests/data/rv/eth-bridge.elf CORE_COMMIT=$(git -C $W/ethereus-main rev-parse --short HEAD)
     unset ETHEREUS_BASE SNAPSHOT ETHEREUS_SYSTEM_LINE ;;
 esac
 case "$ARM" in
   stock) export ETHEREUS_BASE=1 MODEL=$W/models/Qwen3.5-9B MODEL_ID=q9-base ;;
   untrained) export MODEL=$W/dist-store/q9-store-rv MODEL_ID=q9-rv2 SNAPSHOT=$MAIN/build/ethskills.fs.npz ;;
+  untrained-line) export MODEL=$W/dist-store/q9-store-rv MODEL_ID=q9-rv2 SNAPSHOT=$MAIN/build/ethskills.fs.npz \
+    ETHEREUS_SYSTEM_LINE="You have exact tools eth (keccak, ABI, uint256, EVM) and files (Ethereum reference); use them for any value they compute, then continue the task with your other tools." ;;
   v01) export MODEL=$W/dist-store/q9-store-rv-ft1b MODEL_ID=q9-rv2 ETHEREUS_SYSTEM_LINE="$LINE" ;;
   v01-skills) export MODEL=$W/dist-store/q9-store-rv-ft1b MODEL_ID=q9-rv2 ETHEREUS_SYSTEM_LINE="$LINE" SNAPSHOT=$MAIN/build/ethskills.fs.npz ;;
 esac
-if [[ "$ARM" =~ ^(stock|untrained|v01|v01-skills)$ ]]; then :
+if [[ "$ARM" =~ ^(stock|untrained|untrained-line|v01|v01-skills)$ ]]; then :
 elif [ "$ARM" = base ]; then export ETHEREUS_BASE=1 MODEL=$W/models/Qwen3.5-9B MODEL_ID=q9-base
 elif [ "$ARM" = store ]; then  # Internet+Skills: the store checkpoint, its files, one line about es/, on main's code
   unset ETHEREUS_BASE; CODE=$W/ethereus-main/experimental/riscv; export MODEL=$W/dist-store/q9-store-rv MODEL_ID=q9-rv2
