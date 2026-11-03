@@ -92,3 +92,5 @@ Rules for future work. Each line is the rule an accepted fix implies; the bracke
 - A gate script's later step never overwrites a finished result of the same name; copy first or name by checkpoint. (the ft1b gates reran the untrained evaluation and wrote the Ethereus test into `ft1/`)
 
 - Docker Desktop on the Mac uses the containerd image store, where `docker image inspect .Id` is the manifest digest, not the config digest the VM reports; compare the config digest (from the saved manifest) and the layer diffIDs, never the Id across the two hosts.
+- A Kind 2 task's renamed original must pass every test, or it is rejected (the verifier pays only when all checks pass; PRB's 10 tasks allowed pre-existing failures and failed on their own reference).
+- When test renaming numbers an overloaded test, calls to that overload are renamed with it, matched by argument count (Solady's `testX()` calls `testX(123)`; renaming only the definition broke every Solady file's compile, 0 of 170).
