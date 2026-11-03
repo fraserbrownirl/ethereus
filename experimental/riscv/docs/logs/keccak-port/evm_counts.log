@@ -1,0 +1,16 @@
+case                       before    after   delta same_out
+totalSupply                 29871    29871    0.0% True
+decimals                    27589    27589    0.0% True
+balanceOf-alice             69627    62894   -9.7% True
+balanceOf-bob               69027    62294   -9.8% True
+transfer-ok                127765   114299  -10.5% True
+transfer-short              79170    72437   -8.5% True
+approve                    114830   101364  -11.7% True
+allowance-0                107987    94521  -12.5% True
+transferFrom-revert        117562   104096  -11.5% True
+transfer-bob-revert         78801    72068   -8.5% True
+amm-quote                   95174    95174    0.0% True
+amm-zero-revert             49142    49142    0.0% True
+selector-miss               24753    18020  -27.2% True
+selector-hit                 2045     2045    0.0% True
+create                      25461    18728  -26.4% True

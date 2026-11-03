@@ -1,0 +1,14 @@
+# Vendored Ko-/riscvcrypto (CC0) — Keccak-f[1600] in plain RV32I assembly
+Source: https://github.com/Ko-/riscvcrypto @ 0d99785a8cfdf12e7bccdcf8998034f0e66113c1 (2019-07-02)
+Paper: Stoffelen, "Efficient Cryptography on the RISC-V Architecture" (LATINCRYPT 2019).
+Licence: CC0 1.0 Universal (LICENSE, copied verbatim from the upstream root).
+Files:
+- keccakf1600/keccakf1600_asm.S -> keccakf1600_asm.S
+  One change: line 429 `.data` -> `.section .rodata` (the round-constant table is
+  read-only; keeps it in the 128 KB DROM instead of the 32 KB RAM). Code is verbatim.
+ISA used: RV32I only (lw/sw/xor/and/or/not/slli/srli/addi/bge/la). No Zbb/Zbkb, no M.
+State layout: 50 x uint32, lane i = words [2i] (even bits) and [2i+1] (odd bits) —
+identical to XKCP KeccakP-1600-inplace32BI, so XKCP's AddBytes/ExtractBytes (bit
+interleaving) are reused unchanged. Lane complementing is applied and undone inside
+the call, so the in/out state is the plain (uncomplemented) interleaved state.
+Used by ../keccak.c (KeccakP1600_Permute_24rounds replaced by keccakf1600()).

@@ -1,0 +1,40 @@
+  ... 250 cases, 0 mismatches (27 s)
+  ... 500 cases, 0 mismatches (42 s)
+  ... 750 cases, 0 mismatches (56 s)
+  ... 1000 cases, 0 mismatches (70 s)
+  ... 1250 cases, 0 mismatches (84 s)
+  ... 1500 cases, 0 mismatches (98 s)
+  ... 1750 cases, 0 mismatches (112 s)
+  ... 2000 cases, 0 mismatches (126 s)
+  ... 2250 cases, 0 mismatches (140 s)
+  ... 2500 cases, 0 mismatches (154 s)
+  ... 2750 cases, 0 mismatches (168 s)
+  ... 3000 cases, 0 mismatches (182 s)
+  ... 3250 cases, 0 mismatches (196 s)
+  ... 3500 cases, 0 mismatches (211 s)
+  ... 3750 cases, 0 mismatches (226 s)
+  ... 4000 cases, 0 mismatches (242 s)
+  ... 4250 cases, 0 mismatches (259 s)
+  ... 4500 cases, 0 mismatches (275 s)
+  ... 4750 cases, 0 mismatches (292 s)
+  ... 5000 cases, 0 mismatches (309 s)
+  ... 5250 cases, 0 mismatches (326 s)
+  ... 5500 cases, 0 mismatches (342 s)
+  ... 5750 cases, 0 mismatches (359 s)
+  ... 6000 cases, 0 mismatches (376 s)
+  ... 6250 cases, 0 mismatches (392 s)
+  ... 6500 cases, 0 mismatches (410 s)
+  ... 6750 cases, 0 mismatches (426 s)
+boundary slice: 576 cases, 0 mismatches
+7496 cases (selector 2000, encode 2000, decode 920, create 2000, create2 0), 0 mismatches (488.3 s), 0 rejected by design, asserted as errors
+  selector    2000 cases     13245 instructions     27774 tokens  (2.10 tok/instr)
+  encode      2000 cases     30574 instructions     60637 tokens  (1.98 tok/instr)
+  decode       920 cases      8679 instructions     11761 tokens  (1.36 tok/instr)
+  create      2000 cases     24254 instructions     51560 tokens  (2.13 tok/instr)
+  selector   window: 2000 drawn, 0 over-80-tokens, 0 over-16B-row, 2000 run
+  encode     window: 4815 drawn, 2815 over-80-tokens, 0 over-16B-row, 2000 run
+  decode     window: 40000 drawn, 39080 over-80-tokens, 0 over-16B-row, 920 run
+  create     window: 2049 drawn, 49 over-80-tokens, 0 over-16B-row, 2000 run
+  create2    window: 40000 drawn, 40000 over-80-tokens, 0 over-16B-row, 0 run
+GATE 1 PASS (ref machine == Python on all cases)
+exit=0

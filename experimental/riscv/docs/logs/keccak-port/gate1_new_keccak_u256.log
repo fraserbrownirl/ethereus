@@ -1,0 +1,24 @@
+  ... 250 cases, 0 mismatches (14 s)
+  ... 500 cases, 0 mismatches (26 s)
+  ... 750 cases, 0 mismatches (37 s)
+  ... 1000 cases, 0 mismatches (49 s)
+  ... 1250 cases, 0 mismatches (60 s)
+  ... 1500 cases, 0 mismatches (71 s)
+  ... 1750 cases, 0 mismatches (82 s)
+  ... 2000 cases, 0 mismatches (93 s)
+  ... 2250 cases, 0 mismatches (104 s)
+  ... 2500 cases, 0 mismatches (115 s)
+  ... 2750 cases, 0 mismatches (126 s)
+  ... 3000 cases, 0 mismatches (137 s)
+  ... 3250 cases, 0 mismatches (149 s)
+  ... 3500 cases, 0 mismatches (162 s)
+  ... 3750 cases, 0 mismatches (173 s)
+  ... 4000 cases, 0 mismatches (185 s)
+unary slice: 5652 cases, 0 mismatches
+9652 cases (keccak 2000, u256 2000), 0 mismatches (1088.8 s), 10 rejected by design, asserted as errors
+  keccak      2000 cases     17344 instructions     38122 tokens  (2.20 tok/instr)
+  u256        2000 cases     12110 instructions     17586 tokens  (1.45 tok/instr)
+  keccak     window: 5037 drawn, 3037 over-80-tokens, 0 over-16B-row, 2000 run
+  u256       window: 12134 drawn, 10134 over-80-tokens, 0 over-16B-row, 2000 run
+GATE 1 PASS (ref machine == Python on all cases)
+exit=0

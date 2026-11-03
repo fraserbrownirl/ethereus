@@ -1,0 +1,20 @@
+[newelf] eth.ELF=/private/tmp/claude-501/-Users-fraserbrown/562a4a79-1a52-4bb0-9c6a-b1fe8feafff5/scratchpad/new2/eth.elf BRIDGE_ELF=/private/tmp/claude-501/-Users-fraserbrown/562a4a79-1a52-4bb0-9c6a-b1fe8feafff5/scratchpad/new2/eth-bridge.elf
+[newelf] test_rv_errors.ELF -> /private/tmp/claude-501/-Users-fraserbrown/562a4a79-1a52-4bb0-9c6a-b1fe8feafff5/scratchpad/new2/eth.elf
+[newelf] test_rv_errors.BRIDGE -> /private/tmp/claude-501/-Users-fraserbrown/562a4a79-1a52-4bb0-9c6a-b1fe8feafff5/scratchpad/new2/eth-bridge.elf
+[newelf] test_rv_spill.ELF -> /private/tmp/claude-501/-Users-fraserbrown/562a4a79-1a52-4bb0-9c6a-b1fe8feafff5/scratchpad/new2/eth-bridge.elf
+.....................................................................................................................................................................................................................................................................................MISMATCH keccak "keccak 'eQeBk%;8FzPFbhB8db~d4=+:]'" got='0x1a49e04d8a2541caf28a058a94a8a22226fda36cd1fe6fabef97cff14b6c4582\n' want='wrong\n'
+ raw: '0x1a49e04d8a2541caf28a058a94a8a22226fda36cd1fe6fabef97cff14b6c4582\n'
+2 cases (keccak 2), 1 mismatches (0.1 s), 0 rejected by design, asserted as errors
+  keccak         2 cases     17282 instructions     38052 tokens  (2.20 tok/instr)
+  keccak     window: 10 drawn, 8 over-80-tokens, 0 over-16B-row, 2 run
+GATE 1 FAIL: 1/2 mismatches
+  e.g. "keccak 'eQeBk%;8FzPFbhB8db~d4=+:]'" got '0x1a49e04d8a2541caf28a058a94a8a22226fda36cd1fe6fabef97cff14b6c4582\n' want 'wrong\n'
+..............
+file decode: 200 cases, 57408 instr avg
+.
+file create2: 200 cases, 22294 instr avg
+.
+file run: 200 cases, 104989 instr avg
+................................................
+341 passed in 155.25s (0:02:35)
+exit=0
