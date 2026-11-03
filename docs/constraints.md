@@ -91,3 +91,4 @@ Rules for future work. Each line is the rule an accepted fix implies; the bracke
 - An evaluation's token limit covers the longest file the model may read, as the knowledge test's does. (tool evaluation ran at 1,500 tokens; files run to 6,382)
 - A gate script's later step never overwrites a finished result of the same name; copy first or name by checkpoint. (the ft1b gates reran the untrained evaluation and wrote the Ethereus test into `ft1/`)
 
+- Docker Desktop on the Mac uses the containerd image store, where `docker image inspect .Id` is the manifest digest, not the config digest the VM reports; compare the config digest (from the saved manifest) and the layer diffIDs, never the Id across the two hosts.
