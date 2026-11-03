@@ -15,6 +15,9 @@ Rules for future work. Each line is the rule an accepted fix implies; the bracke
 
 - Before a resume job touches files, every earlier job that writes or deletes them is confirmed stopped; a copy job deletes its pieces only after the whole file's hash matches the source. (an old copy script, still waiting on stalled downloads, joined an incomplete archive and deleted the parts under a resume job)
 
+- A watchdog that stops a process checks the process is gone before it logs a stop, and kills from the host by the PIDs `docker top` reports, not from inside the container. (the first 190-minute watchdog logged a stop while OpenCode kept running another 4 minutes)
+- A remote command never runs `pkill -f` or `pgrep -f` with a pattern that also appears in its own command line; put such steps in a script file and run the file. (twice an SSH session killed itself, including the watchdog restart)
+
 ## Oracles, gates and tests
 
 - The oracle is the external library; the firmware moves to match it, never the reverse. (quirk-mirroring harness)
