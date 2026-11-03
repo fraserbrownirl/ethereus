@@ -1,62 +1,125 @@
 # ETH Evals submission (draft)
 
-Status: partial scores below, fork batch outstanding; every number here comes from a run, with its source file. Nothing has been submitted or published.
+Status: draft for Fraser's review, 2026-11-04. Nothing has been submitted, posted or published. Every number
+below comes from a run on the eval VM, recorded in the evidence pack (`route-a/gates/evidence_pack.py`; a copy
+with its `SHA256SUMS` is on the Mac at `~/Dev/ethereus-artifacts/2026-11-03/step3/evidence/step3-final/`). The
+board is filled by ETH Evals' own CI, not by submitted numbers (`docs/ethevals-review.md`), so this is an evidence
+pack for the maintainers plus a proposed `job.yaml` entry, not a results PR.
 
-## Decisions
+## What is being evaluated
 
-Fraser, 2026-11-01:
+Ethereus-9B puts a RISC-V computer inside the weights of Qwen3.5-9B. Its firmware gives the model exact Ethereum
+tools (`eth`: keccak, ABI encode and decode, uint256 maths, an EVM; `files`: an Ethereum reference store) that run
+in the forward pass, with no outside call. Ethereus-9B-v0.1 adds a LoRA fine-tune that teaches the model to decide
+when to use them. Three models, three modes, the board's 37 tasks:
 
-- Internet passes OpenCode's own tools through, and ours are added on top.
-- All 37 tasks on Internet, both arms: the 28 no-key tasks, then the 9 whose grader uses `ANTHROPIC_API_KEY` (list below). Fraser supplies the key.
+| Model | What it is | Served as |
+|---|---|---|
+| Ethereus-9B-v0.1 | Qwen3.5-9B with the circuit, plus the v0.1 fine-tune (LoRA, KL to stock 0.0078, MMLU-500 78.6 vs stock 78.0) | `frsrcom/Ethereus-9b-v0.1` (private), the same checkpoint |
+| Ethereus-9B (untrained) | Qwen3.5-9B with the circuit, no fine-tune | the merged checkpoint with the file store |
+| Qwen3.5-9B | stock `Qwen/Qwen3.5-9B`, no circuit | the base checkpoint |
+
+## Results
+
+All 37 tasks, 2 trials each, OpenCode 1.18.33, real RPC. "Model only" is the harness's vanilla mode: one call, no
+agent tools, the 25 Concepts tasks only (50 trials). Passed / scored; errors and timeouts counted apart and not
+scored as passes.
+
+| Model | Mode | Concepts | Build | Act | Overall | Errors | Timeouts | eth calls | files calls | OpenCode's tools | Judge spend |
+|---|---|---|---|---|---|---|---|---|---|---|---|
+| Ethereus-9B-v0.1 | Internet + Skills | 10/50 | 0/18 | 0/6 | **10/74** | 0 | 0 | 0 | 50 | 0 | $2.92 |
+| Ethereus-9B-v0.1 | Internet | 12/50 | 0/18 | 0/6 | **12/74** | 0 | 0 | 0 | 50 | 0 | $2.96 |
+| Ethereus-9B-v0.1 | Model only | 18/50 | – | – | **18/50** | 0 | 0 | 0 | 4 | – | $0.08 |
+| Ethereus-9B (untrained) | Internet | 12/50 | 0/17 | 0/6 | **12/73** | 1 | 2 | 2 | 2 | 1,761 | $4.39 |
+| Ethereus-9B (untrained) | Model only | 14/50 | – | – | **14/50** | 0 | 0 | 0 | 0 | – | $0.07 |
+| Qwen3.5-9B | Internet | 12/50 | 0/17 | 0/6 | **12/73** | 1 | 0 | – | – | 2,969 | $3.39 |
+| Qwen3.5-9B | Model only | 14/50 | – | – | **14/50** | 0 | 0 | – | – | – | $0.08 |
+
+Judge (Claude Opus 5.5, high, $2 cap per trial) total for Step 3: $13.89.
+
+What the numbers say:
+
+- **Model only, where the built-in tool is the only tool, v0.1 leads**: 18 of 50 against 14 for both the untrained
+  model and stock. It passes everything they pass plus `compiler-memory-bytes-delete` and
+  `governance-arbitrum-block-clock`, both trials each.
+- **With an agent (Internet), all three models score 12 and none passes a Build or Act task.** They fail in different
+  ways. v0.1 answers in one turn: it looks things up in its store (`get` 36–38, `list` 12–14 per arm) and never calls
+  OpenCode's tools. The untrained model and stock work in the workspace (1,761 and 2,969 OpenCode tool calls, mostly
+  `bash`) but finish none of the build tasks, and the untrained model calls `eth` only twice.
+- **Internet + Skills** (v0.1 with the harness's skills mode) scores 10, below Internet.
+
+So v0.1 learned to use its tools on questions and did not learn to keep working with an agent's tools. The fix,
+agent trajectories that mix both kinds of tool, is the v0.2 data proposal (`docs/v02-data-proposal.md`).
 
 ## Exact configuration
 
 | Item | Value |
-| --- | --- |
-| Harness | `BuidlGuidl/ethevals`, Harbor 0.24.0, attempts per `runner/ethevals/job.yaml` (`n_attempts: 2`). Commit to be recorded at the first run |
-| Agent | OpenCode 1.18.33 via `ethevals.opencode:OpenCode`, no prompt changes |
-| Vanilla agent | `ethevals.vanilla:VanillaAgent`, one call, no tools |
-| Host | One Vast VM, 58642243: x86, RTX PRO 6000 Blackwell WS 97 GB, Docker 28.1.1. Harness and model on the same box |
-| Model endpoint | `serve.py` on `172.17.0.1:8080`, one arm at a time, `route-a/gates/serve_arm.sh`. Job config `route-a/gates/job-ethereus.yaml` |
-| Venv | `/workspace/venv`, lock `route-a/gates/venv.lock.txt`: torch 2.15.0+cu132, transformers 5.22.1 |
-| Trial time limit | `[agent].timeout_sec = 2700` (45 min) in a copy of the tasks; nothing else differs. The board sets no limit, but its cost cap stops a runaway agent and its CI stops a step at 190 min; these local models have no cost. A timed-out trial is still verified on the work left behind. Base's 40 trials finished before the limit was added, none anywhere near it |
-| Rate limit | `serve.py`'s limit is lifted for the eval. It returned 429 twice, both inside one looping base trial, which was rerun |
-| Web search | No `EXA_API_KEY`, so no Exa search. The board treats it as optional; board rows on OpenCode may have it |
-| Base arm | Stock `Qwen/Qwen3.5-9B` through `chipformer/rv/serve.py` with `ETHEREUS_BASE=1`, offering only the client's tools |
-| Ethereus arm | `dist/q9-rv2` through `serve.py`, with `eth-bridge.elf` sha256 `b320d31b4fd722ac0adfdbcf1313892967ea1bf8e826bd318138cb167c06c685` |
-| Tools, Ethereus | `eth` plus the client's tools. `files` joins once a store checkpoint is merged |
-| Generation | Greedy on both arms, chat template with `enable_thinking=False` on both, because `RvChat.prompt_ids` fixes it and the driver is not changed. So these rows measure Qwen without its thinking mode |
-| Server settings | `ETHEREUS_BUFFERED_STREAM=1`, `ETHEREUS_SYNC_SECONDS` raised for long turns |
+|---|---|
+| Harness | `BuidlGuidl/ethevals` cc3daaf519c5953396d48fa17c1951d4a3889f31, Harbor 0.24.0 |
+| Job file | `route-a/gates/job-step3.yaml`, sha256 b9e83c448134d1c9976d9fd38a2e612534c38938c7b61d44e596a4cdf6cff4ea |
+| Agent | OpenCode 1.18.33 via `ethevals.opencode:OpenCode`, no prompt changes; vanilla agent for Model only |
+| Board parity | Exa search (`EXA_API_KEY`), `OPENCODE_EXPERIMENTAL_OUTPUT_TOKEN_MAX: '+131072'`, effort high, `n_attempts: 2`, `max_retries: 1`, judge as the board (`docs/ethevals-review.md`) |
+| Provider entry | OpenAI-compatible, context 65,536, output 8,192, `tool_call: true` |
+| Trial time | no harness limit; each trial bounded at 190 minutes, as the board's CI ends a step, by a host watchdog. From arm 4 a watchdog stop is a timeout failure with no retry. Arms 1–3 ran before the watchdog; their longest trial was 10.5 minutes |
+| Host | one Vast VM, x86, RTX PRO 6000 Blackwell Workstation Edition 97 GB; harness and model on the same box, one trial at a time |
+| Model server | `chipformer/rv/serve.py` (core repo), one model at a time on :8080 (`route-a/gates/serve_arm.sh`) |
+| Firmware | `eth-bridge.elf` sha256 7c4175e6…, the same on every arm (recorded by the server in each arm's traces) |
+| File store | snapshot c2f24eca… on all Ethereus arms; none on stock |
+| System line, v0.1 | the training data's line, set by our server, not the agent: "Files under es/ hold the ethskills reference; before answering, list them and get whatever is relevant." The untrained model and stock get none |
+| Generation | greedy, chat template with `enable_thinking=False` on every model, so these rows measure Qwen without its thinking mode |
+| Streaming | `stream: true` is answered after generation ends, with keepalive comments; tokens are not streamed, so timing is not comparable with a streaming provider |
 
-How the Ethereus arm answers tools: a call to `eth` runs in the circuit and its response stays in the assistant content, so OpenCode sends it back as history and never sees it as a tool to run. A call to any other tool stops generation at `</tool_call>` before the circuit runs and goes to OpenCode as OpenAI `tool_calls`.
+How a tool call is handled: a call to `eth` or `files` runs in the circuit during generation and its response stays
+in the assistant text, so OpenCode sends it back as history and never runs it. A call to any other tool stops
+generation at `</tool_call>` before the circuit sees it and goes to OpenCode as an OpenAI `tool_calls` entry. With no
+client tools (Model only) the server returns our calls as tool messages, which the vanilla agent does not record, so
+the Model only in-weights call counts above come from the server's own traces.
 
-Deviations from `docs/api-spec-clean.md`, all for this eval:
+## Disclosures
 
-- Client tools are honoured, where the spec says to ignore them (Fraser's decision).
-- `stream: true` is answered after generation ends, with keepalive comments. OpenCode needs a streaming response; tokens are not actually streamed, so timing here is not comparable with a streaming provider.
+- **VM stop.** On 2026-11-03 at 17:13 UTC the provider stopped the VM (account credit at zero) during the stock
+  Internet arm, after 22 of its trials had results. The same VM came back on the same GPU at 18:33 and the arm
+  resumed at 18:36; the trial in flight was lost and rerun. Every finished arm's files matched their hashes after the
+  restart. No result mixes hardware.
+- **Errors under the board's limits.** Stock Internet: one `swap-page` trial still failed after its retry; OpenCode
+  itself was killed at the task's 4,096 MB memory limit (exit 137, kernel OOM log). Three more such kills on that arm
+  (`aave-savings-page` once, `swap-page` twice) were retried once each and the retries were scored. Untrained Internet: `voting-page` ended with no reward file after its retry (the agent hit the
+  8,192-token output cap). Both tasks' limits are ETH Evals' own and were not changed.
+- **Watchdog stops.** Untrained Internet: `treasury-eth-sale` and `swap-page` were stopped at 190 minutes, counted
+  as timeouts (failures), not retried.
+- **Server changes after the eval, not in these numbers.** A decode ban on `<|im_start|>` and `<|endoftext|>`
+  (`<|im_end|>` the only end of turn), and firmware fixes for a 32-bit wraparound in ABI decode bounds checks and a
+  faster keccak. None of them ran in Step 3.
+- **What is local.** Our numbers come from our runs, not the board's CI. The model is not on OpenRouter; see the
+  open item below.
 
+## Proposed `job.yaml` entry
 
+An OpenCode entry like the board's others, pointing at a hosted OpenAI-compatible endpoint for Ethereus-9B-v0.1,
+with the same parity settings as above. Open item for Fraser: where the endpoint is hosted and who pays for it;
+the board's CI calls models through OpenRouter, so this needs either an OpenRouter listing or the maintainers'
+agreement to a direct endpoint. Draft, not sent:
 
-## Task coverage
+```yaml
+models:
+  ethereus-9b-v0.1:
+    name: <provider>/ethereus-9b-v0.1   # to be set once hosted
+    effort: high
+agents:
+  opencode-ethereus-9b-v0.1:
+    name: opencode
+    import_path: ethevals.opencode:OpenCode
+    version: 1.18.33
+    model: ethereus-9b-v0.1
+    modes: [internet, skills]
+    env:
+      EXA_API_KEY: ${EXA_API_KEY}
+      OPENCODE_EXPERIMENTAL_OUTPUT_TOKEN_MAX: '+131072'
+```
 
-37 tasks: 25 Concepts, 9 Build, 3 Act.
+## Evidence pack contents
 
-| Set | Concepts | Build | Act | Total |
-| --- | --- | --- | --- | --- |
-| No key, runs now | 20 | 6 | 2 | 28 |
-| Grader uses the key, held | 5 | 3 | 1 | 9 |
-
-No-key tasks per mode: vanilla 20, internet 28, skills 28.
-
-In all 9 held tasks the key is in `[verifier.env]`, no agent or environment section has it, the instruction does not mention an LLM, and an Opus-judged criteria file grades the result.
-
-## Results
-
-Internet, 9B, all 37 tasks, finished 2026-11-02 01:30 UTC:
-
-| Arm | Tasks | Passed | Source on the eval VM |
-|---|---|---|---|
-| Base | 37 | 6 | `results/internet-nokey-base`, `results/internet-rest-base`, `results/internet-fork-base` |
-| Ethereus | 37 | 6 | `results/internet-nokey-rv2`, `results/internet-rest-rv2`, `results/internet-fork-rv2` |
-
-Both arms pass the same 6 tasks. The circuit ran in 3 of the Ethereus arm's calls, all misuses of `run` on one task, so this does not yet measure the circuit. On the fork tasks some trials on each arm ended at the 45-minute agent limit or were killed at the task container's memory limit (exit 137). They count as 0, and base's `voting-page` judge error is unscored.
+`table.md` (the results table, per-arm errors and tool calls), `config.md` (harness commit, job file hash, core
+commit, firmware and snapshot per arm from the server traces), `SHA256SUMS` (755 files: our rows and trajectories).
+Raw results per arm on the Mac with their sha256, `~/Dev/ethereus-artifacts/2026-11-03/step3/`; the stock Internet
+copy leaves out the trials' workspace snapshots, which stay on the VM in a full archive.
