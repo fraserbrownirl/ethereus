@@ -18,6 +18,8 @@ Rules for future work. Each line is the rule an accepted fix implies; the bracke
 - A watchdog that stops a process checks the process is gone before it logs a stop, and kills from the host by the PIDs `docker top` reports, not from inside the container. (the first 190-minute watchdog logged a stop while OpenCode kept running another 4 minutes)
 - A remote command never runs `pkill -f` or `pgrep -f` with a pattern that also appears in its own command line; put such steps in a script file and run the file. (twice an SSH session killed itself, including the watchdog restart)
 
+- On the eval VM, an image for another platform is fetched by digest into its own tag (or with a registry tool), never with `docker pull --platform` on a tag the eval tasks build on. (pulling the arm64 ethevals-chain for the Mac repointed the tag 12 ETH Evals tasks use, for 80 seconds during arm 4; no trial built in that window)
+
 ## Oracles, gates and tests
 
 - The oracle is the external library; the firmware moves to match it, never the reverse. (quirk-mirroring harness)
