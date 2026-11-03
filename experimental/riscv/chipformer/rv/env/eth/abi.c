@@ -631,12 +631,11 @@ int abi_decode(const char *types, const char *hexdata, char *out_lines, size_t o
             if(cursor+32 > dlen){ set_err(errbuf,errlen,"bad offset"); return -1; }
             uint32_t off = ((uint32_t)data[cursor+28]<<24)|((uint32_t)data[cursor+29]<<16)|((uint32_t)data[cursor+30]<<8)|data[cursor+31];
             cursor+=32;
-            if(off+32 > dlen){ set_err(errbuf,errlen,"bad offset"); return -1; }
+            // Subtraction form: off+32 and off+32+blen wrap in 32-bit arithmetic when off or blen is near 2^32,
+            // which passed the old additive checks and read before the buffer (the Solana lane's finding).
+            if(off > dlen || dlen - off < 32){ set_err(errbuf,errlen,"bad offset"); return -1; }
             uint32_t blen = ((uint32_t)data[off+28]<<24)|((uint32_t)data[off+29]<<16)|((uint32_t)data[off+30]<<8)|data[off+31];
-            // Bound blen before adding: off+32+blen in u32 arithmetic wraps
-            // when blen is near 2^32. After this, off<=8192 and blen<=8192.
-            if(blen > dlen){ set_err(errbuf,errlen,"bad data"); return -1; }
-            if(off+32+blen > dlen){ set_err(errbuf,errlen,"bad data"); return -1; }
+            if(blen > dlen - off - 32){ set_err(errbuf,errlen,"bad data"); return -1; }
             if(ty[i].c==TY_STR){
                 if(utf8_valid(data+off+32, blen)!=0){ set_err(errbuf,errlen,"bad string"); return -1; }
                 if(out_pos + blen + 2 >= out_size){ set_err(errbuf,errlen,"out too small"); return -1; }

@@ -19,6 +19,7 @@ Rules for future work. Each line is the rule an accepted fix implies; the bracke
 - A remote command never runs `pkill -f` or `pgrep -f` with a pattern that also appears in its own command line; put such steps in a script file and run the file. (twice an SSH session killed itself, including the watchdog restart)
 
 - On the eval VM, an image for another platform is fetched by digest into its own tag (or with a registry tool), never with `docker pull --platform` on a tag the eval tasks build on. (pulling the arm64 ethevals-chain for the Mac repointed the tag 12 ETH Evals tasks use, for 80 seconds during arm 4; no trial built in that window)
+- A bounds check on a length or offset read from input is written in subtraction form (`l > inlen - pos`, after `pos <= inlen`), never `pos + l > inlen`: on RV32 the sum wraps. Gate 1 asserts errors for offsets and lengths near 2^32. (eth `decode` returned empty bytes and strings for offsets 0xffffffe0..0xffffffff, reading before its buffer; the Solana lane found the pattern)
 
 ## Oracles, gates and tests
 
