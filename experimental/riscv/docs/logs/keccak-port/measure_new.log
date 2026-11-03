@@ -1,0 +1,8 @@
+chipformer from /Users/fraserbrown/Dev/ethereus-keccak/experimental/riscv/chipformer/__init__.py
+elf /private/tmp/claude-501/-Users-fraserbrown/562a4a79-1a52-4bb0-9c6a-b1fe8feafff5/scratchpad/new/eth.elf sha256 daf3664c31259c47
+ bytes  cmd_instr  keccak256 perm_total perms perm_each ok
+     0      16862      15928      12736     1     12736 ok
+    32      19109      16128      12736     1     12736 ok
+    64      21353      16320      12736     1     12736 ok
+   136      39784      30120      25472     2     12736 ok
+  1000     180868     115580     101888     8     12736 ok

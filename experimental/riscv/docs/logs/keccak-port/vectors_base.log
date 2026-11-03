@@ -1,0 +1,19 @@
+PASS empty (quoted ''): 0xc5d2460186f7233c927e7db2dcc703c0e500b653ca82273b7bfad8045d85a470
+PASS empty (quoted ""): 0xc5d2460186f7233c927e7db2dcc703c0e500b653ca82273b7bfad8045d85a470
+PASS 'abc' (published vector): 0x4e03657aea45a94fc7d47ba826c8d667c0d1e6e33a64a036ec44f58fa12d6c45
+PASS 1 bytes (1 blocks): 0x69c322e3248a5dfc29d73c5b0553b0185a35cd5bb6386747517ef7e53b15e287
+PASS 31 bytes (1 blocks): 0xe65435fd80485a2bb590a21991e36b2b22f317906abe3a35691f018e4313bd90
+PASS 32 bytes (1 blocks): 0xf91ff56d0310a8d8a7d7e2dec3db74afd86e0ce30565d45775bfa45cdb730732
+PASS 33 bytes (1 blocks): 0x44e70659260bff6602c3975a1c8d49f4e401fdd67338427e38ae9ae3247fe7d8
+PASS 135 bytes (1 blocks): 0xcd8fbf6a9edd3c4fdc07b28e392be90da5946948193276c6a5eda0f99f9f2407
+PASS 136 bytes (2 blocks): 0x475c567bfd9260861b6f79c44ca68c174ef847b575be33eef60cfb9e5c4e59bd
+PASS 137 bytes (2 blocks): 0xf5c454e7e15c54ef9cbb582ae946e926cc46c2afbc7747612af033d09fa503d3
+PASS 271 bytes (2 blocks): 0x2d404e32bbf4e9b4bf6a16769f8e01742d58ec8b6d47b62803252d2a9285c20b
+PASS 272 bytes (3 blocks): 0x9d372083bd6d96dbaf815d8a694ca229c8b2bb42a412fa75e57f5814e22767b6
+PASS 273 bytes (3 blocks): 0x2a271e0e0818ab6a4b39504536c301d04313256580889e54bf18e8861eae364d
+PASS 544 bytes (5 blocks): 0xa992a9d4dae00f218a211bfb985f59292cb26c5aa8e516ec258ef215e5dc10a8
+PASS 1000 bytes (8 blocks): 0xa514f7431c5ed70e845f356b4ba805d44600f1b537f9b69c4f4108d723cfad64
+PASS 1100 bytes via @file (9 blocks, firmware max): 0xd38f003a4d2578eb2d827e304996b53536efa7a4ea901726ccadcfbd4c03e234
+chipformer from /Users/fraserbrown/Dev/ethereus-keccak/experimental/riscv/chipformer/__init__.py
+FAILS 0
+exit=0

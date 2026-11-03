@@ -1,0 +1,40 @@
+  ... 250 cases, 0 mismatches (25 s)
+  ... 500 cases, 0 mismatches (36 s)
+  ... 750 cases, 0 mismatches (48 s)
+  ... 1000 cases, 0 mismatches (60 s)
+  ... 1250 cases, 0 mismatches (71 s)
+  ... 1500 cases, 0 mismatches (82 s)
+  ... 1750 cases, 0 mismatches (94 s)
+  ... 2000 cases, 0 mismatches (105 s)
+  ... 2250 cases, 0 mismatches (116 s)
+  ... 2500 cases, 0 mismatches (128 s)
+  ... 2750 cases, 0 mismatches (139 s)
+  ... 3000 cases, 0 mismatches (151 s)
+  ... 3250 cases, 0 mismatches (163 s)
+  ... 3500 cases, 0 mismatches (175 s)
+  ... 3750 cases, 0 mismatches (187 s)
+  ... 4000 cases, 0 mismatches (200 s)
+  ... 4250 cases, 0 mismatches (213 s)
+  ... 4500 cases, 0 mismatches (226 s)
+  ... 4750 cases, 0 mismatches (239 s)
+  ... 5000 cases, 0 mismatches (252 s)
+  ... 5250 cases, 0 mismatches (265 s)
+  ... 5500 cases, 0 mismatches (278 s)
+  ... 5750 cases, 0 mismatches (291 s)
+  ... 6000 cases, 0 mismatches (305 s)
+  ... 6250 cases, 0 mismatches (317 s)
+  ... 6500 cases, 0 mismatches (331 s)
+  ... 6750 cases, 0 mismatches (344 s)
+boundary slice: 576 cases, 0 mismatches
+7496 cases (selector 2000, encode 2000, decode 920, create 2000, create2 0), 0 mismatches (393.3 s), 0 rejected by design, asserted as errors
+  selector    2000 cases      9905 instructions     20947 tokens  (2.11 tok/instr)
+  encode      2000 cases     23841 instructions     46858 tokens  (1.97 tok/instr)
+  decode       920 cases      8679 instructions     11761 tokens  (1.36 tok/instr)
+  create      2000 cases     17949 instructions     38634 tokens  (2.15 tok/instr)
+  selector   window: 2000 drawn, 0 over-80-tokens, 0 over-16B-row, 2000 run
+  encode     window: 4815 drawn, 2815 over-80-tokens, 0 over-16B-row, 2000 run
+  decode     window: 40000 drawn, 39080 over-80-tokens, 0 over-16B-row, 920 run
+  create     window: 2049 drawn, 49 over-80-tokens, 0 over-16B-row, 2000 run
+  create2    window: 40000 drawn, 40000 over-80-tokens, 0 over-16B-row, 0 run
+GATE 1 PASS (ref machine == Python on all cases)
+exit=0

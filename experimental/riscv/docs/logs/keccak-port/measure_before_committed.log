@@ -1,0 +1,7 @@
+elf tests/data/rv/eth.elf sha256 7dcd89331befc2b7
+ bytes  cmd_instr  keccak256 perm_total perms perm_each ok
+     0      23595      22661      19469     1     19469 ok
+    32      25842      22861      19469     1     19469 ok
+    64      28086      23053      19469     1     19469 ok
+   136      53250      43586      38938     2     19469 ok
+  1000     234732     169444     155752     8     19469 ok

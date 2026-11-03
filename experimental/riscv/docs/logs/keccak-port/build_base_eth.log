@@ -1,0 +1,10 @@
+/var/folders/mv/pmwrvzcn0pnf2bmnrlpr8jr80000gn/T/tmp.CojDS4UWTt/selectors.h: 225 entries
+gen_builtins: solc 0.8.38 erc20=1028B amm=446B fixture=2 slots
+00000100 D eth_in
+00000900 D file_buf
+.text               107036   262144
+.rodata              23200   131072
+.ethin                2048      256
+.filebuf              4096     2304
+.data                   20     6400
+.bss                 14568     6424

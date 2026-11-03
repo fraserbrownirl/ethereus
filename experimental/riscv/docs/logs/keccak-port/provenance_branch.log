@@ -1,0 +1,13 @@
+author's files: 130 tracked, 0 differ
+picolibc libc.a 0f4b6d386979, recorded 0f4b6d386979
+riscv64-elf-gcc 16.2.0, pin 16.2.0
+eth.elf: tracked 7dcd89331bef, rebuilt 73b9b80caa18, loaded bytes DIFFER
+eth-bridge.elf: tracked 7c4175e66010, rebuilt 364dd775ee8c, loaded bytes DIFFER
+DIFF eth.elf: segment 0x0: 20992 vs 20992 bytes, first difference at +0x20
+DIFF eth.elf: segment 0x20000: 23200 vs 23392 bytes, first difference at +0x2478
+DIFF eth.elf: segment 0x40000: 107036 vs 115824 bytes, first difference at +0xd
+DIFF eth-bridge.elf: segment 0x0: 22272 vs 22272 bytes, first difference at +0x20
+DIFF eth-bridge.elf: segment 0x20000: 23264 vs 23464 bytes, first difference at +0x24bc
+DIFF eth-bridge.elf: segment 0x40000: 112524 vs 121312 bytes, first difference at +0xd
+PROVENANCE FAIL
+exit=1
