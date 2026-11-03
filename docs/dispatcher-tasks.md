@@ -19,6 +19,7 @@ Single list for the core repo and Route A; the Cursor agent and Muse are retired
 | After Step 3 (d): on the VM, build the images of all Docker-proven Kind 2 tasks; report any that fail (`experimental/taskgen/build_images_vm.sh` on kind2, over `proven-docker.txt`, 30 tasks) | queued | (c) | the proven-id list | | | |
 | After Step 3 (e): merge keccak-port (acda8b4) and abi-wrap-fix (d8f961b) into one firmware build, full gate 1, report the ELF hash; firmware for v0.2 tests | queued | after Step 3 (Mac) | both branches | | | |
 | After Step 3 (f): Hugging Face upload status for frsrcom/Ethereus-9b-v0.1 (card with scores) | queued | (a) | the repo, the scores | | | |
+| After Step 3 (Fraser, 2026-11-03): Qwen3.6-27B config check | queued | STEP3_ALL_DONE; my reading, to confirm with Fraser: does its config (layers, hidden size, attention/linear-attention mix, tokenizer, licence) take the circuit as Qwen3.5-9B does, written up like docs/k3-feasibility.md | the model's own config files | | | |
 | API and open call | blocked | Wait for K3: the flywheel pays off only on a model builders prefer (Fraser) | the K3 checkpoint | | | |
 | Fork batch: 7 mainnet-fork tasks, Internet, both arms | done | | none; needs the GPU only | 2026-11-01 17:30 | 2026-11-02 01:30 | 0 of 7 in both arms; totals 6 of 37 in both |
 | Judged batch: 6 judged tasks plus witness-string rerun, Internet, both arms | done | | none | 2026-11-01 13:28 | 2026-11-01 17:30 | 0 of 7 in both arms; totals 6 of 30 in both |
