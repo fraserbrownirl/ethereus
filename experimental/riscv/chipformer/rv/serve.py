@@ -282,10 +282,11 @@ class BaseEngine:
                                            add_generation_prompt=True, enable_thinking=False,
                                            return_dict=True)  # as RvChat.prompt_ids: same prompt
         ids = list(enc["input_ids"])
-        eos = [248046, 248044]  # RvChat.eos: both arms stop on the same tokens
+        eos = [248046]  # RvChat.eos and RvChat.banned: both arms stop and ban on the same tokens
         with self.lock, self.torch.no_grad():
             out = self.model.generate(self.torch.tensor([ids], device="cuda"), do_sample=False,
                                       max_new_tokens=max_new, eos_token_id=[*eos, self.tcc],
+                                      bad_words_ids=[[248045], [248044]],
                                       stopping_criteria=StoppingCriteriaList([_Stop()]))
         if deadline is not None and time.time() > deadline:
             raise Deadline
