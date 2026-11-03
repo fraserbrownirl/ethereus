@@ -170,7 +170,10 @@ class RvChat:
                         if self.store_cfg else None)
         self.store_snap = None  # the store heads' state to start from (load_store)
         self.last_state = None  # where the last generate's chip state is (save_store)
-        self.eos = {248046, 248044}
+        # As the Qwenputer author's generation_config.json: <|im_start|> and <|endoftext|> are banned, so Qwen
+        # cannot open a fake user turn or end right after a tool response; <|im_end|> is the only end of turn.
+        self.eos = {248046}
+        self.banned = (248045, 248044)
         self.fast = fast and self.dev == "cuda"
         # executor "verify": both chip paths, the HF view's hc checked against the executor's
         self.executor = executor if self.dev == "cuda" else False
@@ -349,6 +352,12 @@ class RvChat:
                                   position_ids=p4[0], past_key_values=cache)
         return self.model.lm_head(self.lm.norm(h))[0, -1]
 
+    def _qwen_pick(self, logits) -> int:
+        """Qwen's greedy next token over its own vocabulary, with the banned tokens masked."""
+        q = logits[: self.v0].clone()
+        q[list(self.banned)] = float("-inf")
+        return int(torch.argmax(q))
+
     # --- one position ----------------------------------------------------------------------
     @torch.no_grad()
     def _layers(self, ids, cache, pos: int | None):
@@ -452,7 +461,7 @@ class RvChat:
         pos = len(ids)  # the next text token's RoPE position
         gen, n_text, n_chip_tok = [], 0, 0
         # the prompt's last position: Qwen predicts (nothing captured yet)
-        nxt = int(torch.argmax(logits[: self.v0]))
+        nxt = self._qwen_pick(logits)
         t0 = time.time()
         mismatch = 0
         t_chip = t_text = 0.0
@@ -524,7 +533,7 @@ class RvChat:
                 q = int(torch.argmax(logits))
                 if ct is not None and check_head and q != ct:
                     mismatch += 1
-                nxt = ct if ct is not None else int(torch.argmax(logits[: self.v0]))
+                nxt = ct if ct is not None else self._qwen_pick(logits)
                 t_text += time.time() - ts
         dt = time.time() - t0
         return {"tokens": gen, "text_tokens": n_text, "chip_tokens": n_chip_tok,
