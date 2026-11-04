@@ -20,7 +20,7 @@ ORDER = ["selectors", "event topics", "EIP-55 checksums", "CREATE/CREATE2 addres
 tok = Tokenizer.from_file("/workspace/models/Qwen3.5-9B/tokenizer.json")
 tasks = [json.loads(l) for f in sorted(glob.glob(f"{X}/tasks-tools/*.jsonl")) for l in open(f)]
 cat = {t["id"]: NAMES[re.sub(r"-\d+$", "", t["id"])] for t in tasks}
-probe = {t["id"]: t["prompt"].strip()[:120] for t in tasks}   # a prompt prefix long enough to be unique
+probe = {t["id"]: t["prompt"].strip() for t in tasks}   # the full prompt: two mapping-slot prompts share 120 characters
 
 table = collections.OrderedDict()
 for arm in sys.argv[1:]:
