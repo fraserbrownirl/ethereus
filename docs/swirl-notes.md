@@ -27,3 +27,188 @@ These notes collect what the dispatcher has established for that work; each line
   `docs/dispatcher-log.md`, 2026-11-04).
 - So the trajectories need both kinds of tool in one task: in-weights calls where they compute the value, and the
   agent's tools for the workspace, continuing after each in-weights result.
+
+## The SWiRL brief (Fraser, 2026-11-04, verbatim)
+
+Copied from Fraser's brief so the VM Muse reads it from the repo. Amendments follow in their own section as Fraser sends them.
+
+### SWiRL brief: multi-step training data for Ethereus v0.2
+
+**Owner:** VM Muse. **Branch:** `swirl-wip` in `~/ethereus-swirl`. Builds code only; the GPU runs go through the dispatcher.
+
+#### Why
+
+v0.1 was trained on single-turn data and learned "look up, restate, stop", making 0 agent tool calls. The one-line hint got only 2 of 20 in the line test, with 1 eth call.
+
+v0.2 needs real multi-step trajectories: call a tool, read the result, act again, recover from errors, and stop when done. The reference is SWiRL (Stanford CS329A, part 5): generate one step at a time, score each step, filter by process, then RL.
+
+#### 1. Environment
+
+- **Tasks:** Kind 1, 2 and 3, training split only.
+  - The sha256 hold-outs stay out.
+  - Nothing from ETH Evals or eth-evals.
+- **Tools:** use the exact tool-call format and chat template the model uses at inference:
+  - `eth`, with results from `ref.py` (bit-exact with the chip);
+  - `files`;
+  - forge build/test;
+  - workspace read/write;
+  - for Kind 3, the filtered chain RPC.
+- **Step cap:** 20 steps.
+
+#### 2. Step loop
+
+At each step the generator sees the task plus the full history, and emits reasoning plus exactly one action: a tool call or the final answer. The tool runs and its result is appended to the history.
+
+#### 3. Generator
+
+- **Model:** Qwen3.6-27B is the first choice (Apache-2.0).
+  - The dispatcher confirmed it fits one VM GPU in bf16.
+  - It can't share the GPU with an eval server, so generation and evals take turns.
+- **Allowed:** only open, Apache-licensed models.
+- **Never:** Claude, Opus or Muse output.
+- **Recording:** put the model, version and sampling settings in every row.
+- **Serving:** vLLM ≥0.19.0 in its own venv, with `--tool-call-parser qwen3_coder --reasoning-parser qwen3 --language-model-only`.
+- **Tool-call format:** `<tool_call><function=NAME><parameter=ARG>value</parameter></function></tool_call>`. Tools are listed as JSON in `<tools>`, and results go in `<tool_response>`.
+  - Non-string arguments arrive as JSON, so the `ref.py` adapter parses typed values as JSON and keeps string parameters as raw text.
+- **Delivery:** write generation as a GPU script with a run-command for the dispatcher to run.
+
+#### 4. Exact step scoring, wherever possible
+
+- The tool call is well-formed.
+- Its arguments are correct wherever the task has a known intermediate (selector, slot, base units, address).
+- The tool result is used correctly in the next step or in the final answer, with no copying errors.
+- The number of passing forge tests goes up, not down.
+- There are no forbidden actions: editing tests, cheat RPC methods, network access.
+- Stopping before the verifier passes counts as a bad step.
+
+Use an open-model judge only for steps that can't be scored exactly, and report what share of steps needed it.
+
+#### 5. Outcome
+
+The outcome is the task's own verifier result: pass or fail.
+
+#### 6. Two datasets
+
+- **SFT:** only trajectories where every step is good and the outcome passes.
+- **RL:** per-step records (context, action, step reward) from process-filtered trajectories, including trajectories whose outcome failed.
+
+For both datasets:
+- Keep recovery examples (an error, then a fix).
+- Keep the per-source caps: 15 per source, and no source above 30%.
+- Dedupe.
+
+#### 7. Schema (JSONL)
+
+`task_id, kind, source, licence, provenance, generator{model,version,sampling}, steps[{action, tool, args, response, checks{…}, step_reward}], outcome, holdout:false`
+
+#### 8. Provenance rule
+
+- Every task and trajectory records who wrote it: a source repo and its licence, a human, or the generator model.
+- **Nothing written by Muse goes into training data or into any environment we might license out.** This covers trajectories, solutions and task text. Meta Model API terms §10.1(ix) forbid using outputs to train competing models or to build training datasets for them.
+- Muse-written content is for scorer tests only.
+- Flag any existing Kind 1–3 tasks whose prompts or solutions Muse wrote.
+
+#### 9. Prove the scorers before any GPU run
+
+- Convert the existing proven solutions into scripted "golden" trajectories. They must score all-good and pass.
+- Plant bad steps: a wrong selector, a copying error, an early stop, an edited test. Each must be caught.
+- Report the scorers' precision on these tests.
+
+#### 10. Pilot
+
+Prepare a script for 50 tasks × 4 samples, ready for the GPU, with the expected run time.
+
+#### 11. Comparison to plan
+
+v0.2 will be trained two ways:
+- with the built-in circuit;
+- with the same tools called externally.
+
+Design the data so both are possible: the same trajectories, with only the tool executor swapped. This tests whether the in-weights computer adds anything.
+
+#### Report
+
+- the scorer test results;
+- the schema;
+- one sample trajectory;
+- the pilot command;
+- the list of flagged Muse-written tasks;
+- anything you couldn't score exactly.
+
+## Amendments to the brief
+
+(none received yet; added here verbatim as Fraser sends them)
+
+## Provenance rule
+
+Every task and every trajectory records who wrote it: a source repo and its licence, a human, or the generator model
+(with version and sampling). **Nothing written by Muse goes into training data or into any environment we might
+license out** — trajectories, solutions and task text alike — because the Meta Model API terms §10.1(ix) forbid
+using its outputs to train competing models or to build training datasets for them. Muse-written content is for
+scorer tests only. "Muse" here means Meta's Muse models however they were run: the Cursor Muse lanes (Kind 2,
+Kind 3) and the sandboxed Solana Muse.
+
+## Existing Kind 1–3 tasks: who wrote them (from the commit history, 2026-11-04)
+
+Method: every dispatcher commit carries a `Co-Authored-By: Claude` trailer; the Muse lanes' commits (also
+authored "Fraser Brown") carry none. Task text was traced with `git blame` on the generator templates and checked
+against each task's own files. A task is flagged if Muse wrote its prompt (instruction, README, description), its
+solution, or the flaw it plants.
+
+- **Kind 1 (50 proven + 8 held out): none flagged.** `kind1.py` on main has 6 commits, all the dispatcher's; the
+  tasks were built and proven by the dispatcher and frozen as built. Solutions are the upstream MIT sources. The
+  Muse's later `kind1.py` edits are on `kind2` only and did not rebuild these tasks.
+- **Kind 3 (21 tasks): all flagged.** Every commit that created them is the Muse's (696ac9c, f813e81, 22e7f6b,
+  7336a42): instructions, solutions (`solve.sh`, `solution/*.sol`, `confirm.py`) and tests. Scorer tests only.
+  k3-odd-decimals-01, k3-approve-deposit-01…06, k3-stake-claim-01…06, k3-raw-call-01…04, k3-storage-read-01…04.
+- **Kind 2 (52 Docker-proven): 37 flagged, 15 clean.** Every Kind 2 solution is the upstream project's own code and
+  every test the project's own; what differs is who wrote the prompt text and the planted flaw.
+  - The generator `kind2.py` was written by the dispatcher (f70c2d71); in its task-text templates the Muse rewrote
+    the agent-visible instruction's flaw list (eff9555c), the README heading and body and the `task.toml`
+    description (8cbedac8); the Muse added the flaw classes return, state, cast, compare, effects, var and replay
+    and the code that plants them (e85a232e, 31d1892, eff9555c). check, access and bound are the dispatcher's.
+  - Clean (dispatcher-written class and text): k2-oz-3c65c914-bound, k2-oz-29369cec-check, k2-oz-7ca0b5a8-bound,
+    k2-oz-31ee332d-check, k2-dragonfly-063abec9-check, k2-dragonfly-0c31350e-access, k2-dragonfly-bbd30160-check,
+    k2-dragonfly-6445f713-check, k2-dragonfly-077c2457-check, k2-dragonfly-0c3b5933-check,
+    k2-dragonfly-40af734e-check, k2-dragonfly-67984f3b-check, k2-dragonfly-b9471def-check,
+    k2-dragonfly-baa7fb23-check, k2-solady-5f2559b0-check. Caveat for Fraser: these were built by runs the Muse
+    executed, with its edits to the copy-and-rename code (1757928, 8f2aa3d); the identifier renames are mechanical,
+    from the dispatcher's word lists, but the build itself was a Muse run.
+  - Flagged (37):
+    - k2-dragonfly-46bde01d-return: flaw class by Muse
+    - k2-oz-a3b25243-state: flaw class by Muse
+    - k2-dragonfly-b17932e6-compare: flaw class by Muse
+    - k2-oz-01e89889-compare: flaw class by Muse
+    - k2-oz-3bb4c8aa-compare: flaw class by Muse
+    - k2-oz-814828c3-compare: flaw class by Muse
+    - k2-oz-b379cadc-compare: flaw class by Muse
+    - k2-oz-b681c687-compare: flaw class by Muse
+    - k2-oz-cadba713-compare: flaw class by Muse
+    - k2-solady-20420f63-var: flaw class, instruction by Muse
+    - k2-solady-28bbf820-var: flaw class, instruction by Muse
+    - k2-solady-a09e5c06-var: flaw class, instruction by Muse
+    - k2-solady-b208aec0-var: flaw class, instruction by Muse
+    - k2-solady-f34711b5-var: flaw class, instruction by Muse
+    - k2-op-0aa710fa-compare: flaw class, instruction, README/description by Muse
+    - k2-dragonfly-23b49068-check: instruction, README/description by Muse
+    - k2-oz-d2e51bd3-compare: flaw class, instruction, README/description by Muse
+    - k2-solady-20d31965-var: flaw class, instruction, README/description by Muse
+    - k2-solady-aacddbb1-var: flaw class, instruction, README/description by Muse
+    - k2-solady-e9c15fb5-var: flaw class, instruction, README/description by Muse
+    - k2-solady-fc0715c4-var: flaw class, instruction, README/description by Muse
+    - k2-op-1beb1bed-compare: flaw class, instruction, README/description by Muse
+    - k2-op-217ea3ac-compare: flaw class, instruction, README/description by Muse
+    - k2-op-55d41203-bound: instruction, README/description by Muse
+    - k2-op-9e941d54-replay: flaw class, instruction, README/description by Muse
+    - k2-op-9eeb538f-check: instruction, README/description by Muse
+    - k2-op-aabbd493-bound: instruction, README/description by Muse
+    - k2-op-e3fde736-compare: flaw class, instruction, README/description by Muse
+    - k2-op-e54e1ff9-check: instruction, README/description by Muse
+    - k2-hyperlane-48b908bc-compare: flaw class, instruction, README/description by Muse
+    - k2-hyperlane-d7b7504c-check: instruction, README/description by Muse
+    - k2-hyperlane-50bf6bf0-compare: flaw class, instruction, README/description by Muse
+    - k2-hyperlane-53eee410-check: instruction, README/description by Muse
+    - k2-hyperlane-84a88eda-check: instruction, README/description by Muse
+    - k2-hyperlane-92cd9d37-compare: flaw class, instruction, README/description by Muse
+    - k2-hyperlane-da761466-bound: instruction, README/description by Muse
+    - k2-hyperlane-f92a4734-compare: flaw class, instruction, README/description by Muse
