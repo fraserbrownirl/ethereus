@@ -18,8 +18,10 @@ import urllib.request
 from pathlib import Path
 
 REPO = Path(__file__).resolve().parents[1]
-SSH = ["ssh", "-i", os.path.expanduser("~/.ssh/id_ed25519_podminer"), "-o", "IdentitiesOnly=yes",
-       "-o", "ConnectTimeout=15", "-o", "BatchMode=yes", "-p", "24138", "root@121.158.120.138"]
+# The eval VM's address lives in config/vm.json (gitignored; copy config/vm.example.json and fill it in).
+VM = json.loads((REPO / "config/vm.json").read_text()) if (REPO / "config/vm.json").exists() else None
+SSH = ["ssh", "-i", os.path.expanduser(VM["key"]), "-o", "IdentitiesOnly=yes", "-o", "ConnectTimeout=15",
+       "-o", "BatchMode=yes", "-p", str(VM["port"]), f"{VM['user']}@{VM['host']}"] if VM else None
 U = "unknown"
 
 ARTIFACTS = {"eth-bridge.elf": "tests/data/rv/eth-bridge.elf", "eth.elf": "tests/data/rv/eth.elf",

@@ -1,0 +1,1 @@
+{"host": "VM_HOST_OR_IP", "port": 22, "user": "VM_USER", "key": "~/.ssh/YOUR_KEY_FILE"}
