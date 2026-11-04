@@ -22,11 +22,11 @@ tasks = [json.loads(l) for f in sorted(glob.glob(f"{X}/tasks-tools/*.jsonl")) fo
 cat = {t["id"]: NAMES[re.sub(r"-\d+$", "", t["id"])] for t in tasks}
 probe = {t["id"]: t["prompt"].strip() for t in tasks}   # the full prompt: two mapping-slot prompts share 120 characters
 
-table = collections.OrderedDict()
+table = collections.OrderedDict(); per_task = {}
 for arm in sys.argv[1:]:
     res = json.load(open(next(iter(glob.glob(f"{X}/results*/ext-{arm}-tools.json")))))
     passed = {r["id"]: r["pass"] for r in res["tasks"]}
-    eth = collections.Counter(); seen = set()
+    eth = collections.Counter(); seen = set(); resp = collections.defaultdict(list)
     for f in glob.glob(f"/workspace/serve-data/{arm}/traces/*.json"):
         t = json.load(open(f))
         text = tok.decode(t.get("prompt_ids", []), skip_special_tokens=False)
@@ -35,8 +35,23 @@ for arm in sys.argv[1:]:
             continue
         seen.add(tid)
         for seg in t.get("segments") or [{"gen_ids": t.get("gen_ids", [])}]:
-            eth[tid] += tok.decode(seg.get("gen_ids", []), skip_special_tokens=False).count("<function=eth>")
+            g = tok.decode(seg.get("gen_ids", []), skip_special_tokens=False)
+            eth[tid] += g.count("<function=eth>")
+            for call in g.split("<function=eth>")[1:]:   # the circuit's reply follows its call, as <tool_response>
+                m = re.search(r"</tool_call>\s*<tool_response>\n?(.*?)\n?</tool_response>", call, re.S)
+                resp[tid].append(m.group(1).strip() if m else None)
     table[arm] = (passed, eth, seen, res["benchmark"])
+    expect = {t["id"]: str(t["grader"].get("expect", "")) for t in tasks}
+    def klass(i):
+        if passed.get(i): return "pass"
+        r = resp[i]
+        if not r: return "no call"
+        if all(x is None for x in r): return "call, no response"
+        got = [x for x in r if x is not None]
+        if any(x.lower().startswith("error") for x in got) and not any(x.lower() == expect[i].lower() for x in got):
+            return "firmware error"
+        return "right value, wrong final" if any(x.lower() == expect[i].lower() for x in got) else "wrong value"
+    per_task[arm] = {i: (klass(i), eth[i], len([x for x in resp[i] if x is not None])) for i in cat}
 
 print("| Category | Tasks | " + " | ".join(f"{a}: passed, eth calls (tasks with any)" for a in table) + " |")
 print("|---|---|" + "---|" * len(table))
@@ -50,3 +65,14 @@ for c in ORDER + ["Total"]:
 for a, (passed, eth, seen, bench) in table.items():
     print(f"- {a}: {len(passed)} results, traces matched for {len(seen)} of {len(tasks)} tasks; manifest "
           f"{bench['manifest_sha256'][:16]}…, harness {bench['harness_commit']}")
+
+KL = ["pass", "no call", "call, no response", "firmware error", "right value, wrong final", "wrong value"]
+print()
+print("| Outcome | " + " | ".join(per_task) + " |"); print("|---|" + "---|" * len(per_task))
+for k in KL:
+    print(f"| {k} | " + " | ".join(str(sum(v[0] == k for v in pt.values())) for pt in per_task.values()) + " |")
+print()
+print("| Task | Category | " + " | ".join(f"{a}: outcome (eth calls, responses)" for a in per_task) + " |")
+print("|---|---|" + "---|" * len(per_task))
+for i in sorted(cat, key=lambda i: (ORDER.index(cat[i]), i)):
+    print(f"| {i} | {cat[i]} | " + " | ".join(f"{pt[i][0]} ({pt[i][1]}, {pt[i][2]})" for pt in per_task.values()) + " |")
