@@ -5,14 +5,17 @@
 
 Empty values are skipped, so what is already on the VM stays.
 """
+import json
 import os
 import pathlib
 import subprocess
 import sys
 
 FILES = {"ANTHROPIC_API_KEY": "anthropic.key", "MAINNET_RPC_URL": "mainnet_rpc"}
-SSH = ["ssh", "-i", os.path.expanduser("~/.ssh/id_ed25519_podminer"), "-o", "IdentitiesOnly=yes",
-       "-o", "ConnectTimeout=20", "-o", "BatchMode=yes", "-p", "24138", "root@121.158.120.138"]
+# The eval VM's address lives in config/vm.json (gitignored; copy config/vm.example.json and fill it in).
+VM = json.loads((pathlib.Path(__file__).resolve().parents[2] / "config/vm.json").read_text())
+SSH = ["ssh", "-i", os.path.expanduser(VM["key"]), "-o", "IdentitiesOnly=yes", "-o", "ConnectTimeout=20",
+       "-o", "BatchMode=yes", "-p", str(VM["port"]), f"{VM['user']}@{VM['host']}"]
 
 env = pathlib.Path(__file__).resolve().parents[2] / ".env"
 values = {}

@@ -13,3 +13,6 @@ __pycache__/
 
 # Secrets: paste into .env; only .env.example is tracked
 .env
+
+# The eval VM's address: copy config/vm.example.json to config/vm.json; only the example is tracked
+config/vm.json
