@@ -5,7 +5,7 @@ SEEN=/workspace/step3/watch_seen.txt; touch $SEEN
 P=$PPID  # the ssh session; when it ends, stop, so a stale copy never marks errors seen unseen by anyone
 trap 'kill 0' EXIT
 tail -n0 -F /workspace/step3/step3_rest.log /workspace/step3/watchdog.log /workspace/step3/linetest.log /workspace/ethevals-ext/run.log 2>/dev/null \
-  | grep -E --line-buffered 'ARM_DONE|SERVER_FAILED|STEP3_ALL_DONE|LINETEST_DONE|LINETEST_ALL_DONE|EXT_DONE|EXT_ALL_DONE|EXT_FAILED|STOPPED|Traceback|Killed' &
+  | grep -E --line-buffered 'ARM_DONE|SERVER_FAILED|STEP3_ALL_DONE|LINETEST_DONE|LINETEST_ALL_DONE|EXT_DONE|EXT_ALL_DONE|EXT_FAILED|EXT_LINE|STOPPED|Traceback|Killed' &
 while kill -0 $P 2>/dev/null; do
   python3 - "$SEEN" <<'PY'
 import json, glob, os, sys
