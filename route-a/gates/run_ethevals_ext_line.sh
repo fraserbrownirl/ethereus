@@ -12,7 +12,7 @@ export ETHEREUS_KEY=$(< $W/serve.token); cd $X
 bash $G/serve_arm.sh untrained-line >> $LOG 2>&1 || { echo "SERVER_FAILED untrained-line" >> $LOG; exit 1; }
 for track in closed tools; do
   $W/venv/bin/python run_eval.py --name ext-untrained-line-$track --base-url http://127.0.0.1:8080/v1 --model ethereus \
-    --api-key-env ETHEREUS_KEY --track $track --runs 1 --concurrency 1 > $OUT/untrained-line-$track.log 2>&1
+    --api-key-env ETHEREUS_KEY --track $track --runs 1 --concurrency 1 --max-tokens 8192 > $OUT/untrained-line-$track.log 2>&1
   echo "EXT_DONE untrained-line $track rc=$? $(date -u +%FT%TZ)" >> $LOG
 done
 echo "EXT_LINE_DONE $(date -u +%FT%TZ)" >> $LOG
