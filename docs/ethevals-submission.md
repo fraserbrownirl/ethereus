@@ -29,19 +29,22 @@ scored as passes.
 |---|---|---|---|---|---|---|---|---|---|---|---|
 | Ethereus-9B-v0.1 | Internet + Skills | 10/50 | 0/18 | 0/6 | **10/74** | 0 | 0 | 0 | 50 | 0 | $2.92 |
 | Ethereus-9B-v0.1 | Internet | 12/50 | 0/18 | 0/6 | **12/74** | 0 | 0 | 0 | 50 | 0 | $2.96 |
-| Ethereus-9B-v0.1 | Model only | 18/50 | – | – | **18/50** | 0 | 0 | 0 | 4 | – | $0.08 |
+| Ethereus-9B-v0.1 | Model only | 18/50 | – | – | **9 of 25 questions** (18/50 trials) | 0 | 0 | 0 | 4 | – | $0.08 |
 | Ethereus-9B (untrained) | Internet | 12/50 | 0/17 | 0/6 | **12/73** | 1 | 2 | 2 | 2 | 1,761 | $4.39 |
-| Ethereus-9B (untrained) | Model only | 14/50 | – | – | **14/50** | 0 | 0 | 0 | 0 | – | $0.07 |
+| Ethereus-9B (untrained) | Model only | 14/50 | – | – | **7 of 25 questions** (14/50 trials) | 0 | 0 | 0 | 0 | – | $0.07 |
 | Qwen3.5-9B | Internet | 12/50 | 0/17 | 0/6 | **12/73** | 1 | 0 | – | – | 2,969 | $3.39 |
-| Qwen3.5-9B | Model only | 14/50 | – | – | **14/50** | 0 | 0 | – | – | – | $0.08 |
+| Qwen3.5-9B | Model only | 14/50 | – | – | **7 of 25 questions** (14/50 trials) | 0 | 0 | – | – | – | $0.08 |
 
 Judge (Claude Opus 5.5, high, $2 cap per trial) total for Step 3: $13.89.
 
 What the numbers say:
 
-- **Model only, where the built-in tool is the only tool, v0.1 leads**: 18 of 50 against 14 for both the untrained
-  model and stock. It passes everything they pass plus `compiler-memory-bytes-delete` and
-  `governance-arbitrum-block-clock`, both trials each.
+- **Model only, where the built-in tool is the only tool: 9 vs 7 of 25 questions** (greedy decoding, so the 2
+  trials per question are identical: all 25 questions gave the same result on both trials, for every model). v0.1
+  answers 9; the untrained model and stock answer the same 7. v0.1 passes all 7 plus `compiler-memory-bytes-delete`
+  and `governance-arbitrum-block-clock`, and no question goes the other way. **The difference is not significant**:
+  2 discordant questions, both for v0.1, give p = 0.5 on an exact two-sided sign test. The trial counts in the table
+  (18/50, 14/50) double-count each question.
 - **With an agent (Internet), all three models score 12 and none passes a Build or Act task.** They fail in different
   ways. v0.1 answers in one turn: it looks things up in its store (`get` 36–38, `list` 12–14 per arm) and never calls
   OpenCode's tools. The untrained model and stock work in the workspace (1,761 and 2,969 OpenCode tool calls, mostly
@@ -85,6 +88,9 @@ the Model only in-weights call counts above come from the server's own traces.
   itself was killed at the task's 4,096 MB memory limit (exit 137, kernel OOM log). Three more such kills on that arm
   (`aave-savings-page` once, `swap-page` twice) were retried once each and the retries were scored. Untrained Internet: `voting-page` ended with no reward file after its retry (the agent hit the
   8,192-token output cap). Both tasks' limits are ETH Evals' own and were not changed.
+- **Training data overlaps the Concepts source.** v0.1's fine-tune data included question-and-answer rows generated
+  from the ethskills guides, the same source ETH Evals' Concepts quizzes draw on. No eval items, tasks or answers
+  were used. The same guides are also the file store's content on every Ethereus arm.
 - **Watchdog stops.** Untrained Internet: `treasury-eth-sale` and `swap-page` were stopped at 190 minutes, counted
   as timeouts (failures), not retried.
 - **Server changes after the eval, not in these numbers.** A decode ban on `<|im_start|>` and `<|endoftext|>`
