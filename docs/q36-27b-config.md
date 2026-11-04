@@ -66,3 +66,36 @@ data's token ids carry over unchanged.
 
 Stock 27B exactness on our stack (item 1), then the merge with `chipformer.rv.merge --store`, gate 1 (unchanged
 firmware), gate 4 and the canary on GPU, then the fine-tune.
+
+## As the trajectory generator (Fraser, 2026-11-04): inference fit on the eval VM, tool-call format
+
+Not downloaded. VM 58642243: one RTX PRO 6000 Blackwell Workstation Edition, 97,887 MiB (95.6 GiB); 96 GB RAM;
+251 GB free disk.
+
+| Item | Value (estimate unless stated) |
+|---|---|
+| Weights, bf16 | 55.56 GB = 51.7 GiB (15 shards, measured from the repo listing; includes the vision encoder, which `--language-model-only` skips) |
+| KV cache | only the 16 full-attention layers keep one: 16 × 2 × 4 KV heads × 256 × 2 bytes = 64 KiB per token; 4 GiB at 65,536 tokens, 16 GiB at 262,144 |
+| Linear-attention state | fixed per sequence: 48 layers × 48 value heads × 128 × 128 × 4 bytes (fp32) ≈ 150 MB |
+| One full-context sequence | ≈ 72 GiB with activations and CUDA graphs: fits one card |
+| Headroom | vLLM's default `--gpu-memory-utilization 0.9` gives ≈ 86 GiB, so ≈ 30 GiB of KV after weights: about 7 parallel sequences at 65,536 tokens |
+| Alongside an eval server | no: the eval's model server holds ≈ 32 GiB, so the generator and an eval arm run one at a time |
+| Serving | model card: `vllm>=0.19.0` (or `sglang>=0.5.10`), `--reasoning-parser qwen3`, `--enable-auto-tool-choice --tool-call-parser qwen3_coder`; its examples use 8 GPUs for 262,144-token high-throughput serving. vLLM is not installed on the VM; it goes in its own venv, not the eval venv |
+
+Tool-call format (the model's own chat template): the Qwen3.5 XML style, unchanged —
+
+```
+<tool_call>
+<function=NAME>
+<parameter=ARG>
+value
+</parameter>
+</function>
+</tool_call>
+```
+
+tools listed as JSON inside `<tools>…</tools>` in the system prompt, results returned in `<tool_response>…</tool_response>`.
+It is the same shape serve.py parses (`<function=…>`, `<parameter=…>`) and the circuit's own calls use, so calls the
+generator writes can be executed by `ref.py` and replayed through the circuit without a format change. One template
+change from 3.5: non-string arguments are rendered with `tojson` (booleans as `true`), so `ref.py` must read typed
+values as JSON.
