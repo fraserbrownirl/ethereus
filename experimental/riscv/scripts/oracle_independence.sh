@@ -5,12 +5,14 @@ set -u
 RV=$PWD
 W=$(mktemp -d)
 trap 'rm -rf "$W"' EXIT
-export PICO=$RV/toolchain/picolibc-rv32im PYTHON=$RV/.venv/bin/python
+export PICO=$RV/toolchain/picolibc-rv32im PYTHON=${PYTHON:-$RV/.venv/bin/python}
 cp -R chipformer/rv/env "$W/env"
-SRC=$W/env/eth/xkcp/KeccakP-1600-inplace32BI.c
-grep -q '0x00000000UL,    0x00000089UL,' "$SRC" || { echo "ORACLE FAIL: constant not found"; exit 2; }
+# The permutation the firmware runs is riscvcrypto's (env/eth/riscvcrypto); XKCP's
+# round-constant table is dead code there, so the flip must hit the asm's table.
+SRC=$W/env/eth/riscvcrypto/keccakf1600_asm.S
+grep -q '0x00000000, 0x00000089' "$SRC" || { echo "ORACLE FAIL: constant not found"; exit 2; }
 bash chipformer/rv/env/eth/build_eth.sh "$W" control >/dev/null 2>&1 || { echo "ORACLE FAIL: control build"; exit 2; }
-sed -i.bak 's/0x00000000UL,    0x00000089UL,/0x00000000UL,    0x00000088UL,/' "$SRC"
+sed -i.bak 's/0x00000000, 0x00000089/0x00000000, 0x00000088/' "$SRC"
 cmp -s "$SRC" "$SRC.bak" && { echo "ORACLE FAIL: flip did not apply"; exit 2; }
 bash "$W/env/eth/build_eth.sh" "$W" flipped >/dev/null 2>&1 || { echo "ORACLE FAIL: flipped build"; exit 2; }
 shasum -a 256 "$W/control.elf" "$W/flipped.elf" | awk '{print $1}' | uniq | wc -l | grep -q 2 || { echo "ORACLE FAIL: images identical"; exit 2; }

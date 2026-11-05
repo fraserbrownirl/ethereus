@@ -81,8 +81,16 @@ MUST_ERROR = [
     "selector (uint256)",
     "selector foo(uint256)x",
     "selector f(" + "a" * 300 + ")",
-    "encode foo(bytes32) 0x12",
 ]
+
+
+def test_short_bytesn_is_exact_bad_bytes():
+    # A short bytesN value used to answer; it errors exactly (both sides).
+    cmd = "encode foo(bytes32) 0x12"
+    m = eth.machine(cmd, ELF)
+    m.run(3 * 10**6)
+    assert m.out.decode() == "error (bad bytes)\n"
+    assert eth.expected(cmd) == "error (bad bytes)\n"
 
 
 @pytest.mark.parametrize("cmd", MUST_ERROR, ids=[c[:20] for c in MUST_ERROR])

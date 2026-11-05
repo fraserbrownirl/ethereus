@@ -91,6 +91,30 @@ def test_filebuf_quoted_at_is_literal():
     assert out == eth.expected_encode('f(string) "@b"')
 
 
+def test_filebuf_encode_out_too_small():
+    # 4040 bytes of string tail overflows the 4096 out buffer; inline args
+    # (255 chars) can never reach this, so the file path is the only cover.
+    big = "x" * 4040
+    out, _ = eth.run_with_files("encode f(string) @s", {"s": big})
+    assert out == "error (out too small)\n"
+
+
+def test_filebuf_decode_out_too_small():
+    # 60 max-uint256 lines (79 chars each) overflow the 4096 out buffer.
+    blob = "0x" + "ff" * 32 * 60
+    out, _ = eth.run_with_files("decode uint256[60] @b", {"b": blob})
+    assert out == "error (out too small)\n"
+
+
+def test_filebuf_encode_elem_too_long():
+    # A 600-char nested string exceeds the 512 span cap (unreachable inline).
+    big = '["' + "y" * 600 + '"]'
+    out, _ = eth.run_with_files("encode f(string[1]) @a", {"a": big})
+    assert out == "error (array elem too long)\n"
+    out, _ = eth.run_with_files("encode f((string)) @a", {"a": '("' + "y" * 600 + '")'})
+    assert out == "error (tuple elem too long)\n"
+
+
 @pytest.mark.parametrize("cmd,files", [
     ("decode uint256 @zz", {}),
     ("decode uint256 @zz", {"other": "0x00"}),

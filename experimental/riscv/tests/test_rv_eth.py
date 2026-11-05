@@ -103,6 +103,22 @@ def test_bridge_session_reference(cmd):
     assert _session_value(cmd) == want
 
 
+@pytest.mark.parametrize("cmd", [
+    # ABI through the bridge (abi-types-fix): nested composites used ~31KB
+    # of the 32KB stack and wrapped (store-out-of-range fault) before the
+    # scratch-frame cuts. All fit the 80-token window (asserted).
+    "encode f(((uint8,bool),string[])) '((254,1),[g,\"kr\",w])'",
+    "encode f((uint8,(bool,(string)))) '(147,(1,(q7)))'",
+    "encode f(bool[]) [true,false,1]",
+    "encode f(string) hello",
+    "decode uint256 0x" + "ab" * 32,
+])
+def test_bridge_session_abi_nested(cmd):
+    ntok, _ = eth.captured_size(cmd)
+    assert ntok <= eth.CAP_TOKENS
+    assert _session_value(cmd) == eth.expected(cmd)
+
+
 SELECTOR_VECTORS = [
     # (sig, selector) — independently known values, not from the generator
     ("transfer(address,uint256)", "0xa9059cbb\n"),
@@ -171,7 +187,11 @@ ABI_ERROR_VECTORS = [
     ("encode f(bytes2) 0xabc", "error (odd hex)\n"),
     ("encode f(bytes) 0x123", "error (odd hex)\n"),
     ("encode f(uint256[2]) [1]", "error (array len)\n"),
-    ("encode f(uint256[]) [1]", "error (unsupported type)\n"),
+    ("encode f(uint256[]) [1]",
+     "0x7bc5bbbf"
+     "0000000000000000000000000000000000000000000000000000000000000020"
+     "0000000000000000000000000000000000000000000000000000000000000001"
+     "0000000000000000000000000000000000000000000000000000000000000001\n"),
     ("encode f(uint7) 1", "error (bad type)\n"),
     ("encode f(uint08) 1", "error (bad type)\n"),
     ("encode f(bytes33) 0x01", "error (bad type)\n"),
@@ -221,6 +241,75 @@ def test_decode_trailing_data_ignored():
     v1, _, _ = eth.run_one("decode uint8 0x" + "00" * 31 + "ff" + "00" * 31 + "02")
     v2, _, _ = eth.run_one("decode uint8 0x" + "00" * 31 + "ff")
     assert v1 == v2 == "255\n"
+
+
+def test_abi_dynamic_and_tuples():
+    # v2 shapes (regression: bool[] and (bool) used to answer unsupported
+    # type). Selectors are keccak pins; layouts are hand-checked below.
+    w = "00" * 31
+    vecs = [
+        ("encode f(bool[]) [true]",
+         "0xda095a04" + w + "20" + w + "01" + w + "01\n"),
+        ("encode f(bool[]) []",
+         "0xda095a04" + w + "20" + w + "00\n"),
+        ("encode f((uint8,bool)) (5,true)",
+         "0x69a406dd" + w + "05" + w + "01\n"),
+        ("decode bool[] 0x" + w + "20" + w + "01" + w + "01", "[true]\n"),
+        ("decode bool[] 0x" + w + "20" + w + "00", "[]\n"),
+        ("decode (uint8,bool) 0x" + w + "05" + w + "01", "(5,true)\n"),
+        ("decode uint8[] 0x" + w + "20" + w + "02" + w + "07" + w + "08", "[7,8]\n"),
+        # fixed arrays of dynamics carry no length slot; element offsets are
+        # relative to the element sequence (eth_abi-pinned layout)
+        ("decode string[2] 0x" + w + "20" + w + "40" + w + "80"
+         + w + "01" + "61" + "00" * 31 + w + "01" + "62" + "00" * 31,
+         '["a","b"]\n'),
+        # nested strings print quoted; top-level strings print raw
+        ("decode (string) 0x" + w + "20" + w + "20" + w + "03" + "612c62" + "00" * 29,
+         '("a,b")\n'),
+        ("decode string 0x" + w + "20" + w + "03" + "612c62" + "00" * 29,
+         "a,b\n"),
+    ]
+    for cmd, want in vecs:
+        val, _, _ = eth.run_one(cmd)
+        assert val == want, (cmd, val, want)
+
+
+def test_abi_nested_errors():
+    w = "00" * 31
+    deep = "(" * 17 + "uint8" + ")" * 17
+    assert len(deep) < 64
+    vecs = [
+        ("encode f((uint8)) (1,2)", "error (tuple len)\n"),
+        ("encode f((uint8)) [1]", "error (bad tuple)\n"),
+        ("encode f(uint8[]) [" + ",".join(["1"] * 65) + "]", "error (array too long)\n"),
+        ("encode f(string) " + "x" * 300, "error (arg too long)\n"),
+        ("decode " + deep + " 0x" + "00" * 32, "error (too deep)\n"),
+        # offset slot with a high byte set (eth_abi: InvalidPointer)
+        ("decode bytes 0x01" + "00" * 27 + "00000020" + w + "01" + "61" + "00" * 31,
+         "error (bad offset)\n"),
+        # dirty tail padding after bytes content (eth_abi: NonEmptyPaddingBytes)
+        ("decode bytes 0x" + w + "20" + w + "02" + "6162" + "00" * 29 + "01",
+         "error (bad padding)\n"),
+        # length slot with a high byte set
+        ("decode bytes 0x" + w + "20" + "01" + "00" * 27 + "00000002" + "6162" + "00" * 30,
+         "error (bad data)\n"),
+        # dynamic count over the 64 cap (count slot, valid short data)
+        ("decode uint8[] 0x" + w + "20" + w + "41" + w + "01", "error (array too long)\n"),
+        # fixed/dynamic length confusion: no length slot on fixed arrays, so a
+        # 3-count here would read element data, not a count
+        ("decode uint8[2] 0x" + w + "01" + w + "02", "1\n2\n"),
+    ]
+    for cmd, want in vecs:
+        val, _, _ = eth.run_one(cmd)
+        assert val == want, (cmd, val, want)
+
+
+def test_abi_nested_roundtrip():
+    # encode then decode a nested value; the text framing round-trips.
+    enc, _, _ = eth.run_one('encode f((string,uint8[])) ("a,b",[1,2])')
+    assert enc.startswith("0x"), enc
+    dec, _, _ = eth.run_one("decode (string,uint8[]) 0x" + enc[10:].strip())
+    assert dec == '("a,b",[1,2])\n', (enc, dec)
 
 
 def test_tiny_fuzz_abi():

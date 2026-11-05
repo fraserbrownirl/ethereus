@@ -78,9 +78,18 @@ def test_sig_overflow_is_an_error(fuzzbin):
 
 
 def test_hex_overflow_is_an_error(fuzzbin):
-    # Bug 2: unbounded hex_to_bytes into data[8192]. Unreachable via eth_in
+    # Bug 2: unbounded hex_to_bytes into data[2048]. Unreachable via eth_in
     # (2048), so this goes straight at abi_decode with 18KB of hex.
     out = _run(fuzzbin, "decode", "uint256", "0x" + "00" * 9000)
+    assert out == "rc=-1 err=hex too long out=(none)\n"
+
+
+def test_hex_threshold_is_4096_chars(fuzzbin):
+    # The stack-wrap fix (abi-types-fix) shrank abi_decode's data[] 8192 ->
+    # 2048 and the hex cap 16384 -> 4096 chars. Pin both sides of it.
+    out = _run(fuzzbin, "decode", "bytes", "0x" + "ab" * 2048)
+    assert "hex too long" not in out
+    out = _run(fuzzbin, "decode", "bytes", "0x" + "ab" * 2049)
     assert out == "rc=-1 err=hex too long out=(none)\n"
 
 

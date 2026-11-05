@@ -192,7 +192,9 @@ static void handle_encode(const char *arg){
     char *s=tmp; while(isspace((unsigned char)*s)) s++;
     char *lp=strchr(s,'(');
     if(!lp){ put_str("error (bad encode)\n"); return; }
-    char *rp=strchr(lp,')');
+    // Depth-matched close: tuple types nest parens inside the sig.
+    char *rp=NULL;
+    { int dd=0; for(char *c=lp;*c;c++){ if(*c=='(') dd++; else if(*c==')'){ dd--; if(dd==0){ rp=c; break; } } } }
     if(!rp){ put_str("error (bad encode)\n"); return; }
     size_t siglen = rp - s +1;
     if(siglen >= 512){ put_str("error (bad sig)\n"); return; }
@@ -218,11 +220,12 @@ static void handle_encode(const char *arg){
                 if(bi==255 && *p!=q){ put_str("error (arg too long)\n"); return; }
                 if(*p==q) p++; buf[bi]=0;
             } else {
-                // Bracket-aware: array args "[1,2,3]" survive unquoted.
+                // Bracket-aware: array args "[1,2,3]" and tuple args
+                // "(1,2)" survive unquoted; one shared depth counter.
                 int depth=0;
                 while(*p && bi<255){
-                    if(*p=='[') depth++;
-                    else if(*p==']' && depth>0) depth--;
+                    if(*p=='['||*p=='(') depth++;
+                    else if((*p==']'||*p==')') && depth>0) depth--;
                     else if(depth==0 && (isspace((unsigned char)*p) || *p==',')) break;
                     buf[bi++]=*p++;
                 }
@@ -266,7 +269,9 @@ static void handle_encode(const char *arg){
 }
 
 static void handle_decode(const char *arg){
-    char tmp[4096]; cpy_cap(tmp, arg, sizeof(tmp));
+    // 2048: the arg arrives from handle_cmd's 2048-byte copy, so it never
+    // exceeds 2047 chars. Saves 2KB of decode-path stack (same wrap fix).
+    char tmp[2048]; cpy_cap(tmp, arg, sizeof(tmp));
     char *s=tmp; while(isspace((unsigned char)*s)) s++;
     char *end=s+strlen(s); while(end>s && isspace((unsigned char)end[-1])){ end--; *end=0; }
     char *last_space=NULL;
@@ -714,7 +719,10 @@ static void handle_run(const char *arg){
 }
 
 static void handle_cmd(const char *line){
-    char tmp[4096]; cpy_cap(tmp, line, sizeof(tmp));
+    // 2048, not 4096: firmware inputs are eth_in (2048) or call_buf (1280);
+    // the handlers copy again anyway. Saves 2KB of stack floor (bridge
+    // encodes ran at ~31KB of 32KB and wrapped on nested tuples).
+    char tmp[2048]; cpy_cap(tmp, line, sizeof(tmp));
     char *p=tmp;
     while(isspace((unsigned char)*p)) p++;
     char *cmd_end=p;
@@ -777,11 +785,13 @@ int main(void){
             if(n==-2) put_str("error (too long)\n");
             else put_str("error\n");
         } else {
-            char cmdline[2048];
+            // 1280: both buffers receive slices of call_buf (1280), never
+            // more. Saves ~0.75KB of bridge stack floor (same wrap fix).
+            char cmdline[1280];
             if(extract_param(call_buf,"cmd",cmdline,sizeof(cmdline))==0){
                 handle_cmd(cmdline);
             } else {
-                char first[2048];
+                char first[1280];
                 const char *pp=strstr(call_buf,"<parameter");
                 if(pp){
                     const char *gt=strchr(pp,'>');
