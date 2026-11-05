@@ -43,6 +43,8 @@ CONSENTS = ("off", "traces", "full")
 # The loop guard (Fraser, 2026-11-05): a model can repeat a call the firmware rejects until the client times out
 # (the untrained checkpoint sent `decode address uint256 @spill/0` 123 times in one request). Once the same call has
 # had the same error LOOP_LIMIT times in a request, it no longer runs: the host answers LOOP_REPLY in its place.
+# If the model sends a call it was already given LOOP_REPLY for, the turn ends there: the untrained checkpoint
+# ignored the reply and sent the stopped call 115 times, one restart each, past the client's timeout.
 LOOP_LIMIT = 3
 LOOP_REPLY = "this call isn't supported; answer without it"
 _RESPONSE = re.compile(r"<tool_call>(.*?)</tool_call>\s*<tool_response>\n?(.*?)\n?</tool_response>", re.DOTALL)
@@ -150,6 +152,7 @@ class Turn:
     lock_error: object = None
     client_call: dict | None = None
     loop_guard: list[str] = field(default_factory=list)  # each call the loop guard answered
+    loop_guard_ended: bool = False  # the model repeated a call it was already told to answer without
 
 
 def with_system_line(messages: list[dict], line: str | None) -> list[dict]:
@@ -262,9 +265,18 @@ class Engine:
             except Stopped:
                 seg["gen_ids"] = watch.gen[:-1]  # the circuit never saw this </tool_call>
                 seg["owner_mask"] = lock.own[len(ids):] if lock is not None else []
+                full = ids + self._visible(watch.gen)  # through </tool_call>
+                tco = len(full) - 1 - full[::-1].index(T.TCO)
+                call = decode(full[tco + 1:-1]).strip()
+                if call in turn.loop_guard:  # told once already: end the turn before this call
+                    turn.loop_guard_ended = True
+                    visible = full[n0:tco]  # before <tool_call>
+                    turn.text = T.tok.decode(visible, skip_special_tokens=False)
+                    turn.completion_tokens = len(visible)
+                    return turn
                 left -= len(self._visible(watch.gen))
-                ids = ids + self._visible(watch.gen)  # through </tool_call>
-                turn.loop_guard.append(decode(ids[len(ids) - ids[::-1].index(T.TCO):-1]).strip())
+                ids = full
+                turn.loop_guard.append(call)
                 ids = ids + reply  # history: no run follows its </tool_call>
                 files, eth_in = {}, None
                 continue
@@ -472,11 +484,13 @@ def create_app(engine, keys: list[str], data_dir, firmware=None, snapshot=None,
                  "gen_ids": turn.segments[-1]["gen_ids"],
                  "owner_mask": turn.segments[-1]["owner_mask"], "segments": turn.segments,
                  "firmware_sha256": version["firmware_sha256"],
-                 "snapshot_sha256": version["snapshot_sha256"], "loop_guard": turn.loop_guard}
+                 "snapshot_sha256": version["snapshot_sha256"], "loop_guard": turn.loop_guard,
+                 "loop_guard_ended": turn.loop_guard_ended}
         (data / "traces" / f"{tid}.json").write_text(json.dumps(trace))
         if turn.loop_guard:  # every firing, for the results' disclosure
             with open(data / "loop-guard.jsonl", "a") as f:
-                f.write(json.dumps({"timestamp": trace["timestamp"], "trace_id": tid, "calls": turn.loop_guard}) + "\n")
+                f.write(json.dumps({"timestamp": trace["timestamp"], "trace_id": tid, "calls": turn.loop_guard,
+                                    "ended": turn.loop_guard_ended}) + "\n")
         msg, tools = to_message(turn.text, turn.client_call, keep_ours=bool(client_tools))
         level = consent.get(kid, "off")
         if level != "off":
