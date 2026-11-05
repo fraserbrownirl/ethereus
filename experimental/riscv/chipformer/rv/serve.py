@@ -152,7 +152,7 @@ class Turn:
     lock_error: object = None
     client_call: dict | None = None
     loop_guard: list[str] = field(default_factory=list)  # each call the loop guard answered
-    loop_guard_ended: bool = False  # the model repeated a call it was already told to answer without
+    loop_guard_ended: bool = False  # the model repeated a call it was told to answer without: no more calls this turn
 
 
 def with_system_line(messages: list[dict], line: str | None) -> list[dict]:
@@ -205,7 +205,11 @@ class Engine:
     def run(self, messages: list[dict], max_new: int, deadline: float | None = None,
             client_tools: list[dict] = ()) -> Turn:
         with self.lock:
-            return self._run(messages, max_new, deadline, list(client_tools))
+            banned = self.chat.banned
+            try:
+                return self._run(messages, max_new, deadline, list(client_tools))
+            finally:
+                self.chat.banned = banned  # the loop guard bans <tool_call> for one turn only
 
     def _run(self, messages, max_new, deadline, client_tools) -> Turn:
         chat, T = self.chat, self.chat.T
@@ -268,12 +272,11 @@ class Engine:
                 full = ids + self._visible(watch.gen)  # through </tool_call>
                 tco = len(full) - 1 - full[::-1].index(T.TCO)
                 call = decode(full[tco + 1:-1]).strip()
-                if call in turn.loop_guard:  # told once already: end the turn before this call
+                if call in turn.loop_guard and not turn.loop_guard_ended:
+                    # told once already: no more calls this turn, so it answers in text (ending here sent
+                    # clients an empty answer, which they retry)
                     turn.loop_guard_ended = True
-                    visible = full[n0:tco]  # before <tool_call>
-                    turn.text = T.tok.decode(visible, skip_special_tokens=False)
-                    turn.completion_tokens = len(visible)
-                    return turn
+                    chat.banned = (*chat.banned, T.TCO)
                 left -= len(self._visible(watch.gen))
                 ids = full
                 turn.loop_guard.append(call)
