@@ -40,6 +40,12 @@ SYNC_SECONDS = 120
 RATE_MINUTE, RATE_DAY = 30, 600
 MAX_CHIP = 1_000_000  # generate defaults to 60k, which cuts off a run: balanceOf is ~110k
 CONSENTS = ("off", "traces", "full")
+# The loop guard (Fraser, 2026-11-05): a model can repeat a call the firmware rejects until the client times out
+# (the untrained checkpoint sent `decode address uint256 @spill/0` 123 times in one request). Once the same call has
+# had the same error LOOP_LIMIT times in a request, it no longer runs: the host answers LOOP_REPLY in its place.
+LOOP_LIMIT = 3
+LOOP_REPLY = "this call isn't supported; answer without it"
+_RESPONSE = re.compile(r"<tool_call>(.*?)</tool_call>\s*<tool_response>\n?(.*?)\n?</tool_response>", re.DOTALL)
 _TURN = re.compile(r"<tool_call>(.*?)</tool_call>\s*<tool_response>\n?(.*?)\n?</tool_response>\s*"
                    r"(?:<think>\s*</think>\s*)?", re.DOTALL)
 
@@ -55,6 +61,20 @@ class OverWindow(Exception):
 
 class Deadline(Exception):
     """Generation passed the sync limit."""
+
+
+class Stopped(Exception):
+    """The model closed a call the loop guard no longer runs."""
+
+
+def stopped_calls(text: str) -> set[str]:
+    """The calls in ``text`` answered with the same error at least LOOP_LIMIT times."""
+    n: dict[tuple[str, str], int] = {}
+    for call, resp in _RESPONSE.findall(text):
+        if resp.strip().startswith("error"):
+            k = (call.strip(), resp.strip())
+            n[k] = n.get(k, 0) + 1
+    return {call for (call, _), c in n.items() if c >= LOOP_LIMIT}
 
 
 class ClientCall(Exception):
@@ -88,8 +108,10 @@ class Watch:
     Called before the token is stepped, so stopping at </tool_call> means the circuit never ran."""
 
     def __init__(self, T: BR.Text, deadline: float | None = None, ours: set[str] | None = None,
-                 decode=None, movable=None) -> None:
+                 decode=None, movable=None, stop=None, open_call: list[int] | None = None) -> None:
         self.T, self.deadline, self.ours, self.decode, self.movable = T, deadline, ours, decode, movable
+        self.stop = stop  # stop(call ids) is True for a call the loop guard no longer runs
+        self.open = open_call  # a spilled call's ids, opened in the prompt: the model closes it first
         self.spill = SPILL_ON_GPU
         self.gen: list[int] = []
         self.start: int | None = None
@@ -105,10 +127,16 @@ class Watch:
                 m = _FN.search(self.decode(self.gen[self.start:-1]))
                 if m is None or m.group(1).strip() not in self.ours:
                     raise ClientCall
+            if self.stop is not None and self.stop(self.gen[self.start:-1]):
+                raise Stopped
             if (self.spill and len(self.gen) - 1 - self.start > spill.WINDOW
                     and self.movable is not None and self.movable(self.gen[self.start:-1])):
                 raise OverWindow
             self.start = None
+        elif t == self.T.TCC and self.open is not None:
+            if self.stop is not None and self.stop(self.open + self.gen[:-1]):
+                raise Stopped
+            self.open = None
 
 
 @dataclass
@@ -121,6 +149,7 @@ class Turn:
     finish_reason: str = "stop"
     lock_error: object = None
     client_call: dict | None = None
+    loop_guard: list[str] = field(default_factory=list)  # each call the loop guard answered
 
 
 def with_system_line(messages: list[dict], line: str | None) -> list[dict]:
@@ -164,6 +193,12 @@ class Engine:
     def _visible(self, ids: list[int]) -> list[int]:
         return [i for i in ids if i < self.chat.v0]
 
+    def _echo(self, message: str) -> list[int]:
+        """The text tokens the circuit echoes after a call that prints ``message``."""
+        P, NL = self.chat.T.printable, self.chat.T.NL
+        byte = lambda s: [P[b] for b in s.encode()]
+        return [*byte("\n"), P[256], *byte(f"\n{message}\n"), P[257], NL]  # P[256:258]: <tool_response> pair
+
     def run(self, messages: list[dict], max_new: int, deadline: float | None = None,
             client_tools: list[dict] = ()) -> Turn:
         with self.lock:
@@ -180,6 +215,10 @@ class Engine:
         ids = chat.prompt_ids(messages, (*mine, *client_tools))
         turn = Turn(prompt_tokens=len(ids))
         n0, files, eth_in, left = len(ids), {}, None, max_new
+        reply = self._echo(LOOP_REPLY)
+
+        def stop(call: list[int]) -> bool:
+            return decode(call).strip() in stopped_calls(decode(ids[n0:] + self._visible(watch.gen)))
 
         def plan(call: str):
             cmd = spill.parse_cmd(call)
@@ -193,7 +232,8 @@ class Engine:
             lock = None if self.store_tools else BR.Session(T, spill.parked(fw))
             if lock is not None:
                 lock.history(ids)
-            watch = Watch(T, deadline, ours, decode, lambda g: plan(decode(g)) is not None)
+            opened = ids[len(ids) - ids[::-1].index(T.TCO):] if eth_in is not None else None
+            watch = Watch(T, deadline, ours, decode, lambda g: plan(decode(g)) is not None, stop, opened)
             seg = {"prompt_ids": ids, "files": files, "eth_in": eth_in}
             turn.segments.append(seg)
             try:
@@ -218,6 +258,15 @@ class Engine:
                 eth_in, files = plan(call)
                 turn.spilled = True
                 ids = ids + head + self._encode(spill.call_text(eth_in))
+                continue
+            except Stopped:
+                seg["gen_ids"] = watch.gen[:-1]  # the circuit never saw this </tool_call>
+                seg["owner_mask"] = lock.own[len(ids):] if lock is not None else []
+                left -= len(self._visible(watch.gen))
+                ids = ids + self._visible(watch.gen)  # through </tool_call>
+                turn.loop_guard.append(decode(ids[len(ids) - ids[::-1].index(T.TCO):-1]).strip())
+                ids = ids + reply  # history: no run follows its </tool_call>
+                files, eth_in = {}, None
                 continue
             seg["gen_ids"] = r["tokens"]
             seg["owner_mask"] = lock.own[len(ids):] if lock is not None else []
@@ -379,7 +428,8 @@ def create_app(engine, keys: list[str], data_dir, firmware=None, snapshot=None,
     consent: dict = json.loads(consent_file.read_text()) if consent_file.exists() else {}
     key_ids = {k: hashlib.sha256(k.encode()).hexdigest()[:16] for k in keys}
     version = {"core_commit": core_commit, "firmware_sha256": _sha256(firmware),
-               "snapshot_sha256": _sha256(snapshot), "model_id": model_id}
+               "snapshot_sha256": _sha256(snapshot), "model_id": model_id,
+               "loop_guard": {"limit": LOOP_LIMIT, "reply": LOOP_REPLY}}
     pool = ThreadPoolExecutor(1)
     jobs: dict = {}
     hits: dict = {}
@@ -422,8 +472,11 @@ def create_app(engine, keys: list[str], data_dir, firmware=None, snapshot=None,
                  "gen_ids": turn.segments[-1]["gen_ids"],
                  "owner_mask": turn.segments[-1]["owner_mask"], "segments": turn.segments,
                  "firmware_sha256": version["firmware_sha256"],
-                 "snapshot_sha256": version["snapshot_sha256"]}
+                 "snapshot_sha256": version["snapshot_sha256"], "loop_guard": turn.loop_guard}
         (data / "traces" / f"{tid}.json").write_text(json.dumps(trace))
+        if turn.loop_guard:  # every firing, for the results' disclosure
+            with open(data / "loop-guard.jsonl", "a") as f:
+                f.write(json.dumps({"timestamp": trace["timestamp"], "trace_id": tid, "calls": turn.loop_guard}) + "\n")
         msg, tools = to_message(turn.text, turn.client_call, keep_ours=bool(client_tools))
         level = consent.get(kid, "off")
         if level != "off":
@@ -442,7 +495,8 @@ def create_app(engine, keys: list[str], data_dir, firmware=None, snapshot=None,
                 "usage": {"prompt_tokens": turn.prompt_tokens,
                           "completion_tokens": turn.completion_tokens,
                           "total_tokens": turn.prompt_tokens + turn.completion_tokens},
-                "ethereus": {"trace_id": tid, "spilled": turn.spilled, "tool_messages": tools}}
+                "ethereus": {"trace_id": tid, "spilled": turn.spilled, "tool_messages": tools,
+                             "loop_guard": turn.loop_guard}}
 
     def owned_trace(tid: str, kid: str) -> dict:
         p = data / "traces" / f"{tid}.json"

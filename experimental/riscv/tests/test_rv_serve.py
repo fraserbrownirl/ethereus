@@ -242,3 +242,42 @@ def test_trailing_end_tokens_never_reach_the_answer():
     for end in ("<|im_end|>", "<|im_end|>\n<|endoftext|>", "<|endoftext|>\n"):
         assert serve.to_message("no" + end)[0]["content"] == "no"
 
+
+
+def _call(cmd, resp):
+    return (f"<tool_call>\n<function=eth>\n<parameter=cmd>\n{cmd}\n</parameter>\n</function>\n</tool_call>\n"
+            f"<tool_response>\n{resp}\n</tool_response>\n<think>\n\n</think>\n\n")
+
+
+def test_the_loop_guard_stops_a_call_after_the_same_error_three_times():
+    bad = _call("decode (bool,uint256) @spill/0", "error (unsupported type)")
+    assert serve.stopped_calls(bad * 2) == set()
+    stopped = serve.stopped_calls(bad * 3)
+    assert len(stopped) == 1 and "decode (bool,uint256) @spill/0" in stopped.pop()
+
+
+def test_the_loop_guard_ignores_answers_and_different_errors():
+    ok = _call("selector transfer(address,uint256)", "0xa9059cbb")
+    mixed = (_call("decode address uint256 @spill/0", "error (bad type)") * 2
+             + _call("decode address uint256 @spill/0", "error (too long)"))
+    assert serve.stopped_calls(ok * 5 + mixed) == set()
+
+
+def _guarded(seq, stop, open_call=None):
+    class T:
+        TCO, TCC = 1, 2
+
+    w = serve.Watch(T, stop=stop, open_call=open_call)
+    for i in seq:
+        w(i)
+
+
+def test_a_stopped_call_ends_before_the_circuit_runs():
+    with pytest.raises(serve.Stopped):
+        _guarded([1, 7, 7, 2], lambda call: call == [7, 7])
+    _guarded([1, 8, 2], lambda call: call == [7, 7])  # another call runs
+
+
+def test_a_stopped_spilled_call_is_caught_where_the_model_closes_it():
+    with pytest.raises(serve.Stopped):
+        _guarded([2], lambda call: call == [7, 7], open_call=[7, 7])
