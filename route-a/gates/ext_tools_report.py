@@ -34,12 +34,13 @@ for arm in sys.argv[1:]:
         if tid is None:
             continue
         seen.add(tid)
-        for seg in t.get("segments") or [{"gen_ids": t.get("gen_ids", [])}]:
-            g = tok.decode(seg.get("gen_ids", []), skip_special_tokens=False)
-            eth[tid] += g.count("<function=eth>")
-            for call in g.split("<function=eth>")[1:]:   # the circuit's reply follows its call, as <tool_response>
-                m = re.search(r"</tool_call>\s*<tool_response>\n?(.*?)\n?</tool_response>", call, re.S)
-                resp[tid].append(m.group(1).strip() if m else None)
+        # one text over all segments: a spilled call ends one segment and its <tool_response> opens the next
+        g = "".join(tok.decode(seg.get("gen_ids", []), skip_special_tokens=False)
+                    for seg in t.get("segments") or [{"gen_ids": t.get("gen_ids", [])}])
+        eth[tid] += g.count("<function=eth>")
+        for call in g.split("<function=eth>")[1:]:   # the circuit's reply follows its call, as <tool_response>
+            m = re.search(r"</tool_call>\s*<tool_response>\n?(.*?)\n?</tool_response>", call, re.S)
+            resp[tid].append(m.group(1).strip() if m else None)
     table[arm] = (passed, eth, seen, res["benchmark"])
     expect = {t["id"]: str(t["grader"].get("expect", "")) for t in tasks}
     def klass(i):
